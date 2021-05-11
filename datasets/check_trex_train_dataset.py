@@ -23,11 +23,10 @@ def check_tokenizer(subj_label, obj_label, tokenizer):
 if __name__ == "__main__":
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
     
-    for filename in os.listdir("/home/fichtel/projektarbeit/LPAQA/TREx_train"):
+    for filename in os.listdir("/data/fichtel/BERTriple/LPAQA/TREx_train"):
         prop = filename.replace(".jsonl", "")
         print(prop)
-        #print("/home/fichtel/projektarbeit/LPAQA/TREx_train/{}".format(filename))
-        prop_train = open("/home/fichtel/projektarbeit/LPAQA/TREx_train/{}".format(filename), "r")
+        prop_train = open("/data/fichtel/BERTriple/LPAQA/TREx_train/{}".format(filename), "r")
         count_all = 0
         count = 0
         for line in prop_train:
