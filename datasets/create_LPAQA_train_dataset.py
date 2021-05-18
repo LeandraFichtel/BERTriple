@@ -19,7 +19,7 @@ if __name__ == "__main__":
     if path.exists("/data/fichtel/BERTriple/training_datasets/LPAQA_filtered.json"):
         print("removed /data/fichtel/BERTriple/training_datasets/LPAQA_filtered.json")
         os.remove("/data/fichtel/BERTriple/training_datasets/LPAQA_filtered.json")
-    LPAQA_train_filtered_file = open("/data/fichtel/BERTriple/training_datasets/LPAQA_filtered.json", "w")
+    LPAQA_train_filtered_file = open("/data/fichtel/BERTriple/training_datasets/LPAQAfiltered.json", "w")
 
     LPAQA_train_filtered = []
     for filename in os.listdir("/data/fichtel/BERTriple/LPAQA/TREx_train"):
