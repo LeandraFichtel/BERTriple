@@ -64,7 +64,6 @@ if __name__ == "__main__":
     #pepare training dataset
     #read datasets from path
     train_queries, train_answers = read_dataset("/data/fichtel/BERTriple/training_datasets/{}".format(train_file), dictio_prop_template, template)
-    
     #use tokenizer to get encodings
     tokenizer = BertTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)

@@ -22,6 +22,7 @@ if __name__ == "__main__":
     LPAQA_train_filtered_file = open("/data/fichtel/BERTriple/training_datasets/LPAQAfiltered.json", "w")
 
     LPAQA_train_filtered = []
+    count_all = 0
     for filename in os.listdir("/data/fichtel/BERTriple/LPAQA/TREx_train"):
         prop = filename.replace(".jsonl", "")
         LPAQA_train = open("/data/fichtel/BERTriple/LPAQA/TREx_train/{}".format(filename), "r")
@@ -30,8 +31,10 @@ if __name__ == "__main__":
             datapoint = json.loads(line)
             if check_triple(datapoint["obj_label"], tokenizer):
                 count = count + 1
+                count_all = count_all + 1
                 LPAQA_train_filtered.append({"subj": datapoint["sub_label"], "prop": prop, "obj": datapoint["obj_label"]})
         print("Added {} triples of property {}.".format(count, prop))
+    print("Added {} triples for all properties.".format(count_all))
     json.dump(LPAQA_train_filtered, LPAQA_train_filtered_file, indent=4)
                 
         
