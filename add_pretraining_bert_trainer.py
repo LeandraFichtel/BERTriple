@@ -21,9 +21,9 @@ def read_dataset(dataset_path, dictio_prop_template, template):
         subj_label = datapoint["subj"]
         prop =  datapoint["prop"]
         obj_label = datapoint["obj"]
-        query = dictio_prop_template[prop][template]
-        queries.append(query.replace("[S]", subj_label).replace("[O]", "[MASK]"))
-        answers.append(query.replace("[S]", subj_label).replace("[O]", obj_label))
+        query_template = dictio_prop_template[prop][template]
+        queries.append(query_template.replace("[S]", subj_label).replace("[O]", "[MASK]"))
+        answers.append(query_template.replace("[S]", subj_label).replace("[O]", obj_label))
     return queries, answers
 
 class MaskedDataset(torch.utils.data.Dataset):
