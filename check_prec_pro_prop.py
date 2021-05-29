@@ -25,17 +25,25 @@ def print_prec_per_prop(list_dicts_results, props=all_props):
 
 dictio_eval_results = json.load(open("/home/fichtel/projektarbeit/results/queries/eval_queries_100_onetoken_3_LAMA_500_500.json", "r"))
 query_type = "object"
-dict_prop_prec_finetuned_old = {}
+dict_prop_prec_finetuned_old_25 = {}
 precision_per_prop_finetuned = dictio_eval_results[query_type]["precision@1"]["per_prop"]["finetuned"]
 for i, prop in enumerate(all_props):
     if prop in precision_per_prop_finetuned:
-        dict_prop_prec_finetuned_old[prop] = precision_per_prop_finetuned[prop]
+        dict_prop_prec_finetuned_old_25[prop] = precision_per_prop_finetuned[prop]
     else:
-        dict_prop_prec_finetuned_old[prop] = "X"
+        dict_prop_prec_finetuned_old_25[prop] = "X"
+print("finetuned_old_25", calculate_avg(dict_prop_prec_finetuned_old_25, my_props))
 
+dict_prop_prec_finetuned_25 =  dict((pd.read_csv('results/BBCF_LPAQA25_obj_3_LAMA.csv', sep = ',', header = None)).values)
+print("BBCF_LPAQA25_obj_3_LAMA.csv", calculate_avg(dict_prop_prec_finetuned_25, my_props))
 
-print(calculate_avg(dict_prop_prec_finetuned_old, my_props))
+dict_prop_prec_finetuned_41 =  dict((pd.read_csv('results/BBCF_LPAQA41_obj_3_LAMA.csv', sep = ',', header = None)).values)
+print("BBCF_LPAQA41_obj_3_LAMA.csv", calculate_avg(dict_prop_prec_finetuned_41))
 
-dict_prop_prec_finetuned =  dict((pd.read_csv('last_results_finetuned.csv', sep = ',', header = None)).values)
+dict_prop_prec_finetuned_41 =  dict((pd.read_csv('results/BBCF_wikidata41_obj_3_LAMA.csv', sep = ',', header = None)).values)
+print("BBCF_wikidata41_obj_3_LAMA", calculate_avg(dict_prop_prec_finetuned_41))
 
-print_prec_per_prop([dict_prop_prec_finetuned, dict_prop_prec_finetuned_old])
+dict_prop_prec_normal =  dict((pd.read_csv('results/bert_base.csv', sep = ',', header = None)).values)
+print("bert_base.csv", calculate_avg(dict_prop_prec_normal))
+
+#print_prec_per_prop([dict_prop_prec_finetuned, dict_prop_prec_finetuned_old])
