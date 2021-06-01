@@ -19,40 +19,23 @@ import random
 def read_dataset(dataset_path, dictio_prop_template, query_type, sample, template):
     queries = []
     answers = []
-    #print(dataset_path)
-    #dataset_file = json.load(open("/home/kalo/conferences/akbc2021/data/data/TREx/wikidata_training.json", "r"))
-    dataset_file = json.load(open(dataset_path, "r"))
-    print(dataset_path)
-    
-    #dictio = {}
-    #dictio["obj_queries"] = []
-    #for datapoint in dataset_file:
-    #    dp = {}
-    #    dp["subj"] = datapoint["subject"]
-    #    dp["prop"] = datapoint["predicate"]
-    #    dp["obj"] = datapoint["object"]
-    #    dictio["obj_queries"].append(dp)
-    #file = open("/data/fichtel/BERTriple/training_datasets/wikidata41.json", "w")
-    #json.dump(dictio, file)
-    #exit()
-    #prepare dataset
-    dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-    for queries_type in dataset_file:
-        for datapoint in dataset_file[queries_type]:
-            prop =  datapoint["prop"]
-            if prop not in dictio_prop_triple[queries_type]:
-                dictio_prop_triple[queries_type][prop] = [datapoint]
-            else:
-                dictio_prop_triple[queries_type][prop].append(datapoint)
-    #take only a sample of the triples if it is wanted
-    if sample != "all":
-        for queries_type in dictio_prop_triple:
-            for prop in dictio_prop_triple[queries_type]:
+    if os.path.exists(dataset_path):
+        print("read given dataset", dataset_path)
+        dictio_prop_triple = json.load(open(dataset_path, "r"))
+    else:
+        #prepare dataset
+        print("create new dataset", dataset_path)
+        dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
+        dataset_file = json.load(open(dataset_path.replace(sample, "all")))
+        #take only a sample of the triples
+        for queries_type in dataset_file:
+            for prop in dataset_file[queries_type]:
                 #take only random triples when there are more than the max sample number
-                if len(dictio_prop_triple[queries_type][prop]) > int(sample):
-                    dictio_prop_triple[queries_type][prop] = random.sample(dictio_prop_triple[queries_type][prop], int(sample))
-                
-    del dataset_file
+                if len(dataset_file[queries_type][prop]) > int(sample):
+                    dictio_prop_triple[queries_type][prop] = random.sample(dataset_file[queries_type][prop], int(sample))      
+        del dataset_file
+        dataset_file_sample = open(dataset_path, "w")
+        json.dump(dictio_prop_triple, dataset_file_sample)
     if query_type == "subjobj":
         if dictio_prop_triple["subj_queries"] == {} or dictio_prop_triple["obj_queries"] == {}:
             exit("dataset cannot be used for subjobj")
@@ -114,7 +97,7 @@ if __name__ == "__main__":
 
     #parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('-train_file', help="filename of the training dataset")
+    parser.add_argument('-train_file', help="training dataset name (LPAQAfiltered41/LPAQAfiltered25 or wikidata41/wikidata25)")
     parser.add_argument('-sample', help="set how many triple should be used of each property at maximum (e.g. 500 (=500 triples per prop for each query type) or all (= all given triples per prop for each query type))")
     parser.add_argument('-epoch', help="set how many epoches should be executed")
     parser.add_argument('-template', help="set which template should be used (LAMA or label)")
@@ -133,8 +116,8 @@ if __name__ == "__main__":
     lm_name = 'bert-base-cased'
     #pepare training dataset
     #read datasets from path
-    train_queries, train_answers = read_dataset("/data/fichtel/BERTriple/training_datasets/{}".format(train_file), dictio_prop_template, query_type, sample, template)
-    print(train_queries[0], train_answers[0])
+    train_queries, train_answers = read_dataset("/data/fichtel/BERTriple/training_datasets/{}_{}.json".format(train_file, sample), dictio_prop_template, query_type, sample, template)
+    print("check datapoints", train_queries[0], train_answers[0])
     #use tokenizer to get encodings
     tokenizer = BertTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
@@ -146,7 +129,7 @@ if __name__ == "__main__":
 
     print("start training")
     lm_name_path = lm_name.replace("-", "_")
-    model_path = "/data/fichtel/BERTriple/models/{}_finetuned_{}_{}_{}_{}_{}".format(lm_name_path, train_file.split(".")[0], sample, query_type, epoch, template)
+    model_path = "/data/fichtel/BERTriple/models/{}_finetuned_{}_{}_{}_{}_{}".format(lm_name_path, train_file, sample, query_type, epoch, template)
     if os.path.exists(model_path):
         print("remove dir of model")
         shutil.rmtree(model_path)
