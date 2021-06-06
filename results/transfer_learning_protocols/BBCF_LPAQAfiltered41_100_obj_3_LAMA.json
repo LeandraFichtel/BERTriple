@@ -1,0 +1,55 @@
+{
+    "round1": [
+        {
+            "omitted_props": [
+                "P279"
+            ],
+            "tested_prop": {
+                "P279": {
+                    "trained_prec@1": 50.31,
+                    "omitted_prec@1": 43.05
+                }
+            }
+        },
+        {
+            "omitted_props": [
+                "P176"
+            ],
+            "tested_prop": {
+                "P176": {
+                    "trained_prec@1": 83.56,
+                    "omitted_prec@1": 86.95
+                }
+            }
+        },
+        {
+            "omitted_props": [
+                "P1001"
+            ],
+            "tested_prop": {
+                "P1001": {
+                    "trained_prec@1": 75.61,
+                    "omitted_prec@1": 71.61
+                }
+            }
+        }
+    ],
+    "round2": [
+        {
+            "omitted_props": [
+                "P176",
+                "P1001"
+            ],
+            "tested_prop": {
+                "P176": {
+                    "trained_prec@1": 83.56,
+                    "omitted_prec@1": 86.43
+                },
+                "P1001": {
+                    "trained_prec@1": 75.61,
+                    "omitted_prec@1": 69.9
+                }
+            }
+        }
+    ]
+}
