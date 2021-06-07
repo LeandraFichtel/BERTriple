@@ -50,8 +50,8 @@ def run_experiments(
             "template": "",
             "bert_vocab_name": "vocab.txt",
             "batch_size": 32,
-            "logdir": "/data/fichtel/BERTripel/LAMA_output/output",
-            "full_logdir": "/data/fichtel/BERTripel/LAMA_output/output/results/{}/{}".format(
+            "logdir": "/data/fichtel/BERTriple/LAMA_output/output",
+            "full_logdir": "/data/fichtel/BERTriple/LAMA_output/output/results/{}/{}".format(
                 input_param["label"], relation["relation"]
             ),
             "lowercase": False,
