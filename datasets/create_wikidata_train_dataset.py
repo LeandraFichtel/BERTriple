@@ -4,7 +4,7 @@ import os
 def create_entity2label_dict():
     # build a rdf dictionary from wikidata truthy
     entity_dictionary = {}
-    with open("/data/wikidata/latest-truthy.nt", "r") as f:
+    with open("/data/wikidata/truthy_debug.nt", "r") as f:
         for line in f:
             if "rdf-schema#label" in line and "@en " in line:
                 try:
@@ -125,14 +125,18 @@ def get_wikidata_train_data(vocab, entity2label_trexlabel, LAMA_test_dataset_pat
     train_dataset["subj_queries"] = {}
     train_dataset["obj_queries"] = {}
     props = {"P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"}
-    with open("/data/wikidata/latest-truthy.nt", "r") as f:
+    with open("/data/wikidata/truthy_debug.nt", "r") as f:
         for i, line in enumerate(f):
             if i%1000000 == 0:
                 print(i)
-            s,p,o = line.split("> <")
+            if len(line.split("> <")) == 3:
+                s,p,o = line.split("> <")
+            else:
+                #lines that do contain literals
+                continue
             if "wikidata.org/entity" in o and "wikidata.org/entity" in s:
-                s_qid = s.replace("<", "").replace("http://www.wikidata.org/entity/","")
-                o_qid = o.replace("> .\n","").replace("http://www.wikidata.org/entity/","")
+                s_qid = s.replace("<", "").replace(">", "").replace("http://www.wikidata.org/entity/","")
+                o_qid = o.replace("> .\n","").replace("<", "").replace("http://www.wikidata.org/entity/","")
                 p_qid = p.replace("http://www.wikidata.org/prop/direct/","").replace(">","")
                 if p_qid in props:
                     if s_qid in entity2label_trexlabel and o_qid in entity2label_trexlabel:
@@ -172,7 +176,7 @@ def get_wikidata_train_data(vocab, entity2label_trexlabel, LAMA_test_dataset_pat
     return train_dataset
 
 if __name__ == "__main__":
-    entity_dictionary_path = "/data/fichtel/BERTriple/entity_dictionary"
+    entity_dictionary_path = "/data/kalo/akbc2021/entity_dictionary"
     if os.path.exists(entity_dictionary_path):
         print("load existing", entity_dictionary_path)
         with open(entity_dictionary_path, "r") as f:
@@ -183,24 +187,24 @@ if __name__ == "__main__":
         with open(entity_dictionary_path, 'w+') as fp:
             json.dump(entity_dictionary, fp, indent=4, sort_keys=True)
 
-    entity2label_trexlabel_path = "/data/fichtel/BERTriple/entity2label_trexlabel.json"
+    entity2label_trexlabel_path = "/data/kalo/akbc2021/entity2label_trexlabel.json"
     if os.path.exists(entity2label_trexlabel_path):
         print("load existing", entity2label_trexlabel_path)
         with open(entity2label_trexlabel_path, "r") as f:
             entity2label_trexlabel = json.load(f)
     else:
         print("create", entity2label_trexlabel_path)
-        autoprompt_dataset_path = "/data/fichtel/BERTriple/AUTOPROMPT/original/"
+        autoprompt_dataset_path = "/data/kalo/akbc2021/AUTOPROMPT/original/"
         redirects_path = "/data/wikidata/sameAsLinks_wikidata.nt"
         entity2label_trexlabel = change_to_trex_label(entity_dictionary, redirects_path, autoprompt_dataset_path)
         with open(entity2label_trexlabel_path, "w+") as f:
             json.dump(entity2label_trexlabel, f)
     
     
-    wikidata_train_dataset_path = "/data/fichtel/BERTriple/training_datasets/wikidata41.json"
+    wikidata_train_dataset_path = "/data/kalo/akbc2021/training_datasets/wikidata41.json_debug"
     if not os.path.exists(wikidata_train_dataset_path):
         print("create", wikidata_train_dataset_path)
-        autoprompt_dataset_path = "/data/fichtel/BERTriple/AUTOPROMPT/original/"
+        autoprompt_dataset_path = "/data/kalo/akbc2021/AUTOPROMPT/original/"
         vocab_file = "/home/fichtel/BERTriple/LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt"
         with open(vocab_file, "r") as f:
             vocab = set()
