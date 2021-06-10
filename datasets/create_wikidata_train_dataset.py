@@ -1,7 +1,7 @@
 import json
 import os
 
-def create_entity2label_dict(entity_dictionary_path):
+def create_entity2label_dict():
     # build a rdf dictionary from wikidata truthy
     entity_dictionary = {}
     with open("/data/wikidata/latest-truthy.nt", "r") as f:
@@ -23,8 +23,6 @@ def create_entity2label_dict(entity_dictionary_path):
                     entity_dictionary[s] = o
                 except ValueError:
                     continue
-    with open(entity_dictionary_path, 'w+') as fp:
-        json.dump(entity_dictionary, fp, indent=4, sort_keys=True)
     return entity_dictionary
 
 def change_to_trex_label(entity_dictionary, redirects_path, LAMA_test_dataset_path):
@@ -131,8 +129,6 @@ def get_wikidata_train_data(vocab, entity2label_trexlabel, LAMA_test_dataset_pat
         for i, line in enumerate(f):
             if i%1000000 == 0:
                 print(i)
-            if i == 100000:
-                break
             s,p,o = line.split("> <")
             if "wikidata.org/entity" in o and "wikidata.org/entity" in s:
                 s_qid = s.replace("<", "").replace("http://www.wikidata.org/entity/","")
@@ -184,9 +180,8 @@ if __name__ == "__main__":
     else:
         print("create", entity_dictionary_path)
         entity_dictionary = create_entity2label_dict(entity_dictionary_path)
-        with open(entity_dictionary_path, "w+") as f:
-            json.dump(entity_dictionary, f)
-
+        with open(entity_dictionary_path, 'w+') as fp:
+            json.dump(entity_dictionary, fp, indent=4, sort_keys=True)
 
     entity2label_trexlabel_path = "/data/fichtel/BERTriple/entity2label_trexlabel.json"
     if os.path.exists(entity2label_trexlabel_path):
