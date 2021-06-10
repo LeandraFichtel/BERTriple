@@ -4,16 +4,16 @@ import os
 def create_entity2label_dict():
     # build a rdf dictionary from wikidata truthy
     entity_dictionary = {}
-    with open("/data/wikidata/truthy_debug.nt", "r") as f:
+    with open("/data/wikidata/latest-truthy.nt", "r") as f:
         for line in f:
             if "rdf-schema#label" in line and "@en " in line:
                 try:
                     s,p,o = line.split("> ")
                     s = s.replace("<", "")
-                    o = o.replace("@en", "")
+                    o = o.replace("\"@en .\n", "")
                     start = o.index( "\"" ) + 1
-                    end = o.index( "\"", start )
-                    o = o[start:end]
+                    #end = o.index( "\"", start )
+                    o = o[start:]
                     s = s.encode('utf-8').decode('unicode-escape')
                     o = o.encode('utf-8').decode('unicode-escape')
                         
@@ -125,7 +125,7 @@ def get_wikidata_train_data(vocab, entity2label_trexlabel, LAMA_test_dataset_pat
     train_dataset["subj_queries"] = {}
     train_dataset["obj_queries"] = {}
     props = {"P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"}
-    with open("/data/wikidata/truthy_debug.nt", "r") as f:
+    with open("/data/wikidata/latest-truthy.nt", "r") as f:
         for i, line in enumerate(f):
             if i%1000000 == 0:
                 print(i)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
             entity_dictionary = json.load(f)
     else:
         print("create", entity_dictionary_path)
-        entity_dictionary = create_entity2label_dict(entity_dictionary_path)
+        entity_dictionary = create_entity2label_dict()
         with open(entity_dictionary_path, 'w+') as fp:
             json.dump(entity_dictionary, fp, indent=4, sort_keys=True)
 
@@ -201,7 +201,7 @@ if __name__ == "__main__":
             json.dump(entity2label_trexlabel, f)
     
     
-    wikidata_train_dataset_path = "/data/kalo/akbc2021/training_datasets/wikidata41.json_debug"
+    wikidata_train_dataset_path = "/data/kalo/akbc2021/training_datasets/wikidata41.json"
     if not os.path.exists(wikidata_train_dataset_path):
         print("create", wikidata_train_dataset_path)
         autoprompt_dataset_path = "/data/kalo/akbc2021/AUTOPROMPT/original/"
