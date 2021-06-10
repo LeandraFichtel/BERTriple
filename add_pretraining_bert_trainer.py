@@ -9,12 +9,16 @@ from shutil import copyfile
 import random
 import pandas as pd
 from itertools import chain, combinations
-from LAMA.scripts.run_experiments import start_custom_model_eval
+from evaluation import start_custom_model_eval
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 #functions
 def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
     queries = []
     answers = []
+    print("omitted props:", omitted_props)
     if dictio_prop_triple[query_type] == {}:
         exit("dataset cannot be used for {}".format(query_type))
     for prop in dictio_prop_triple[query_type]:
@@ -29,31 +33,34 @@ def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
                 obj_label = datapoint["obj"]
                 query_template = dictio_prop_template[prop][template]
                 if query_type == "subj_queries":
-                    queries.append(query_template.replace("[S]", "[MASK]").replace("[O]", obj_label))
-                    answers.append(query_template.replace("[S]", subj_label).replace("[O]", obj_label))
+                    queries.append(query_template.replace("[X]", "[MASK]").replace("[Y]", obj_label))
+                    answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
                 elif query_type == "obj_queries":
-                    queries.append(query_template.replace("[S]", subj_label).replace("[O]", "[MASK]"))
-                    answers.append(query_template.replace("[S]", subj_label).replace("[O]", obj_label))
+                    queries.append(query_template.replace("[X]", subj_label).replace("[Y]", "[MASK]"))
+                    answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
     return queries, answers
 
 def prepare_dataset(dataset_path, dictio_prop_template, query_type, sample, template, omitted_props):
     if os.path.exists(dataset_path):
         print("read given dataset", dataset_path)
-        dictio_prop_triple = json.load(open(dataset_path, "r"))
+        with open(dataset_path, "r") as dataset_file:
+            dictio_prop_triple = json.load(dataset_file)
     else:
         #prepare dataset
         print("create new dataset", dataset_path)
         dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-        dataset_file = json.load(open(dataset_path.replace(sample, "all")))
-        #take only a sample of the triples
-        for queries_type in dataset_file:
-            for prop in dataset_file[queries_type]:
-                #take only random triples when there are more than the max sample number
-                if len(dataset_file[queries_type][prop]) > int(sample):
-                    dictio_prop_triple[queries_type][prop] = random.sample(dataset_file[queries_type][prop], int(sample))      
-        del dataset_file
-        dataset_file_sample = open(dataset_path, "w")
-        json.dump(dictio_prop_triple, dataset_file_sample)
+        with open(dataset_path.replace(sample, "all")) as dataset_file:
+            dataset = json.load(dataset_file)
+            #take only a sample of the triples
+            for queries_type in dataset:
+                for prop in dataset[queries_type]:
+                    #take only random triples when there are more than the max sample number
+                    if len(dataset[queries_type][prop]) > int(sample):
+                        dictio_prop_triple[queries_type][prop] = random.sample(dataset[queries_type][prop], int(sample))
+                    else:
+                        dictio_prop_triple[queries_type][prop] = dataset[queries_type][prop]
+        with open(dataset_path, "w") as dataset_file_sample:
+            json.dump(dictio_prop_triple, dataset_file_sample)
 
     all_queries = []
     all_answers = []
@@ -95,8 +102,6 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     #get final datasets for training
     train_dataset = MaskedDataset(train_question_encodings, train_answer_encodings)
     
-    model = BertModel.from_pretrained(lm_name)
-
     print("start training")
     lm_name_short = lm_name.split("-")
     lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
@@ -110,10 +115,10 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     
     model_path = "/data/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
     
-    if os.path.exists(model_path):
-        print("remove dir of model")
-        shutil.rmtree(model_path)
-    os.mkdir(model_path)
+    #if os.path.exists(model_path):
+    #    print("remove dir of model")
+    #    shutil.rmtree(model_path)
+    #os.mkdir(model_path)
     
     training_args = TrainingArguments(
     output_dir=model_path+'/results',          # output directory
@@ -124,7 +129,8 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     weight_decay=0.01,                # strength of weight decay
     logging_dir=model_path+'/logs',   # directory for storing logs
     logging_steps=10,
-    save_total_limit=0
+    save_total_limit=0,
+    save_strategy="no"
     )
     
     model = BertForMaskedLM.from_pretrained(lm_name)
@@ -142,7 +148,7 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     return model_path.split("/")[-1]
 
 if __name__ == "__main__":
-    os.environ['CUDA_VISIBLE_DEVICES'] = "1"
+    #os.environ['CUDA_VISIBLE_DEVICES'] = "1"
     dictio_prop_template = json.load(open("/data/fichtel/BERTriple/templates.json", "r"))
     #parser
     parser = argparse.ArgumentParser()
@@ -167,6 +173,9 @@ if __name__ == "__main__":
     lm_name = 'bert-base-cased'  
     
     if transfer_learning:
+        #get results of baseline (bert-base-cased)
+        result_baseline = dict((pd.read_csv('/home/fichtel/BERTriple/results/bert_base_{}.csv'.format(template), sep = ',', header = None)).values)
+        
         #train all props if it was not already done with this setup
         lm_name_short = lm_name.split("-")
         lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
@@ -180,49 +189,91 @@ if __name__ == "__main__":
             model_dir_all_trained = model_path_all_trained.split("/")[-1]
         result_all_trained = dict((pd.read_csv('/home/fichtel/BERTriple/results/{}.csv'.format(model_dir_all_trained), sep = ',', header = None)).values)
 
+        #procotol to save the process of the transfer learning experiment
         protocol = {}
+        all_props = ["P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"]
+        
+        #round0: remove props that have no prec@1 improvement after fine-tuning compared to baseline
+        round = "round0"
+        protocol[round] = {}
+        protocol[round]["tested_prop"] = {}
+        threshold = 1.1
+        props = all_props.copy()
+        remaining_props = []
+        for prop in all_props:
+            protocol[round]["tested_prop"][prop] = {}
+            protocol[round]["tested_prop"][prop]["baseline_prec@1"] = result_baseline[prop]
+            protocol[round]["tested_prop"][prop]["trained_prec@1"] = result_all_trained[prop]
+            if protocol[round]["tested_prop"][prop]["trained_prec@1"] > threshold * protocol[round]["tested_prop"][prop]["baseline_prec@1"]:
+                remaining_props.append(prop)
+        protocol[round]["remaining_props"] = remaining_props
+        
         #round1: omitt props only seperately
         round = "round1"
         protocol[round] = []
-        all_props = ["P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"]
-        props = ["P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"]
         for i, prop in enumerate(all_props):
             omitted_props = [prop]
             dictio = {}
             dictio["omitted_props"] = omitted_props
+            ##ONLY FOR THIS TIME, HAS TO BE CHANGED TODO
+            #if omitted_props:
+            #    props_string = "_"
+            #    omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
+            #    for prop in omitted_props: 
+            #        props_string = props_string + prop
+            #model_dir_omitted = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+            #if os.path.exists("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted)):
+            #    print("no training and eval for", prop)
+            #else:
+        
             #train
             model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with LAMA
-            start_custom_model_eval(model_dir_omitted)
+            start_custom_model_eval(model_dir_omitted, omitted_props)
             result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {prop: {}}
-            dictio["tested_prop"][prop]["trained_prec@1"] = result_all_trained[prop]
             dictio["tested_prop"][prop]["omitted_prec@1"] = result_omitted[prop]
             protocol[round].append(dictio)
         
         #save protocol
-        protocol_file = open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+")
-        json.dump(protocol, protocol_file, indent=4)
+        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+            json.dump(protocol, protocol_file, indent=4)
 
+        #protocol = json.load(open("/home/fichtel/BERTriple/results/transfer_learning_protocols/BBCF_LPAQAfiltered41_100_obj_3_LAMA.json", "r"))
         #prepare round2 to remove the props for which trained_prec@1 != omitted_prec@1 and to define pairs of remaining props
-        threshold = 0.9
-        for experiment in protocol["round1"]:
-            for prop in experiment["tested_prop"]:
-                if experiment["tested_prop"][prop]["omitted_prec@1"] < threshold * experiment["tested_prop"][prop]["trained_prec@1"]:
-                    props.remove(prop)
-        print("remaining props:", props)
-        props_pairs = [(props[i],props[j]) for i in range(len(props)) for j in range(i+1, len(props))]
+        #threshold = 0.9
+        #props = all_props.copy()
+        #for experiment in protocol["round1"]:
+        #    for prop in experiment["tested_prop"]:
+        #        if experiment["tested_prop"][prop]["omitted_prec@1"] < threshold * experiment["tested_prop"][prop]["trained_prec@1"]:
+        #            props.remove(prop)
+        #print("remaining props:", props, len(props))
+        #props_pairs = [(props[i],props[j]) for i in range(len(props)) for j in range(i+1, len(props))]
+        props_pairs = [(all_props[i],all_props[j]) for i in range(len(all_props)) for j in range(i+1, len(all_props))]
 
         #round2: omitt pairs of props
         round = "round2"
         protocol[round] = []
         for i, pair in enumerate(props_pairs):
+            print("considering pair {} of {} pairs".format(i, len(props_pairs)))
             omitted_props = list(pair)
             dictio = {}
             dictio["omitted_props"] = omitted_props
+            ##ONLY FOR THIS TIME, HAS TO BE CHANGED TODO
+            #if omitted_props:
+            #    props_string = "_"
+            #    omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
+            #    for prop in omitted_props: 
+            #        props_string = props_string + prop
+            #model_dir_omitted = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+            #if os.path.exists("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted)):
+            #    print("no training and eval for", prop)
+            #else:
+
+            #train
             model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with LAMA
-            start_custom_model_eval(model_dir_omitted)
+            start_custom_model_eval(model_dir_omitted, omitted_props)
             result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {}
             for prop in omitted_props:
@@ -231,8 +282,8 @@ if __name__ == "__main__":
             protocol[round].append(dictio)
         
         #save protocol
-        protocol_file = open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+")
-        json.dump(protocol, protocol_file, indent=4)
+        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+            json.dump(protocol, protocol_file, indent=4)
 
         #find groups
         dependent_props = {}
@@ -243,7 +294,6 @@ if __name__ == "__main__":
                 if prop in experiment["tested_prop"]:
                     round1_omitted_prec = experiment["tested_prop"][prop]["omitted_prec@1"]
                     break
-            print(round1_omitted_prec)
             for experiment in protocol["round2"]:
                 if prop in experiment["tested_prop"]:
                     round2_omitted_prec = experiment["tested_prop"][prop]["omitted_prec@1"]
@@ -252,9 +302,29 @@ if __name__ == "__main__":
                         omitted_props.remove(prop)
                         dependent_props[prop].append(omitted_props[0])
         protocol["dependent_props"] = dependent_props
-
         #save protocol
-        protocol_file = open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+")
-        json.dump(protocol, protocol_file, indent=4)
+        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+            json.dump(protocol, protocol_file, indent=4)
+        #building graph
+        graph = {}
+        for prop in all_props:
+            graph[prop] = {}
+            for experiment in protocol["round1"]:
+                if prop in experiment["tested_prop"]:
+                    round1_omitted_prec = experiment["tested_prop"][prop]["omitted_prec@1"]
+                    break
+            for experiment in protocol["round2"]:
+                if prop in experiment["tested_prop"]:
+                    round2_omitted_prec = experiment["tested_prop"][prop]["omitted_prec@1"]
+                    omitted_props = experiment["omitted_props"].copy()
+                    omitted_props.remove(prop)
+                    graph[prop][omitted_props[0]] = round2_omitted_prec/round1_omitted_prec
+        protocol["graph"] = graph
+        #save protocol
+        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+            json.dump(protocol, protocol_file, indent=4)
     else:
+        #train
         model_dir = train(lm_name, train_file, sample, epoch, template, query_type, None)
+        #evaluate with LAMA
+        start_custom_model_eval(model_dir)

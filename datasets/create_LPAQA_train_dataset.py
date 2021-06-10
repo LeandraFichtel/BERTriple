@@ -51,6 +51,7 @@ if __name__ == "__main__":
                         LPAQA_train_filtered["subj_queries"][prop].append({"subj": datapoint["sub_label"], "prop": prop, "obj": datapoint["obj_label"]})
             print("Added {} triples for object queries of property {}.".format(count_obj_queries, prop))
             print("Added {} triples for subject queries of property {}.".format(count_subj_queries, prop))
+    print(len(LPAQA_train_filtered["obj_queries"]))
     json.dump(LPAQA_train_filtered, LPAQA_train_filtered_file, indent=4)
                 
         
