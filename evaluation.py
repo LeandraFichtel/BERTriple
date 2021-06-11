@@ -16,6 +16,7 @@ from os.path import isfile, join
 from shutil import copyfile
 from collections import defaultdict
 import json
+import shutil
 
 
 def run_experiments(
@@ -164,9 +165,10 @@ def start_custom_model_eval(model_dir, omitted_props):
             "label": model_dir,
             "models_names": ["bert"],
             "bert_model_name": "bert-base-cased-finetuned",
-            "bert_model_dir": "/data/fichtel/BERTriple/models/{}".format(model_dir),
+            "bert_model_dir": "/home/fichtel/BERTriple/models/{}".format(model_dir),
         },
     ]
+    shutil.rmtree("/data/fichtel/BERTriple/LAMA_output/output/results/{}".format(model_dir))
     run_all_LMs(parameters, LMs)
 
 

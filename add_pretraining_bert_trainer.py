@@ -40,7 +40,7 @@ def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
                     answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
     return queries, answers
 
-def prepare_dataset(dataset_path, dictio_prop_template, query_type, sample, template, omitted_props):
+def prepare_dataset(dataset_path, query_type, sample, omitted_props):
     if os.path.exists(dataset_path):
         print("read given dataset", dataset_path)
         with open(dataset_path, "r") as dataset_file:
@@ -93,8 +93,8 @@ class MaskedDataset(torch.utils.data.Dataset):
         return len(self.labels)
 
 def train(lm_name, train_file, sample, epoch, template, query_type, omitted_props):
-    train_queries, train_answers = prepare_dataset("/data/fichtel/BERTriple/training_datasets/{}_{}.json".format(train_file, sample), dictio_prop_template, query_type, sample, template, omitted_props)
-    print("check datapoints:", train_queries[0], train_answers[0])
+    train_queries, train_answers = prepare_dataset("/data/kalo/akbc2021/training_datasets/{}_{}.json".format(train_file, sample), query_type, sample, omitted_props)
+    print("check datapoint with {} template:".format(template), train_queries[0], train_answers[0])
     #use tokenizer to get encodings
     tokenizer = BertTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
@@ -113,12 +113,12 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     else:
         props_string = ""
     
-    model_path = "/data/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+    model_path = "/home/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
     
-    #if os.path.exists(model_path):
-    #    print("remove dir of model")
-    #    shutil.rmtree(model_path)
-    #os.mkdir(model_path)
+    if os.path.exists(model_path):
+        print("remove dir of model")
+        shutil.rmtree(model_path)
+    os.mkdir(model_path)
     
     training_args = TrainingArguments(
     output_dir=model_path+'/results',          # output directory
@@ -145,7 +145,7 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     trainer.save_model(model_path)
     copyfile("/home/fichtel/BERTriple/LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt", model_path + "/vocab.txt")
     os.rename(model_path + "/config.json", model_path + "/bert_config.json")
-    return model_path.split("/")[-1]
+    return model_path, model_path.split("/")[-1]
 
 if __name__ == "__main__":
     #os.environ['CUDA_VISIBLE_DEVICES'] = "1"
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         props_string = ""
         model_path_all_trained = "/data/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
         if not os.path.exists(model_path_all_trained):
-            model_dir_all_trained = train(lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path, model_dir_all_trained = train(lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_all_trained)
         else:
@@ -215,21 +215,12 @@ if __name__ == "__main__":
             omitted_props = [prop]
             dictio = {}
             dictio["omitted_props"] = omitted_props
-            ##ONLY FOR THIS TIME, HAS TO BE CHANGED TODO
-            #if omitted_props:
-            #    props_string = "_"
-            #    omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
-            #    for prop in omitted_props: 
-            #        props_string = props_string + prop
-            #model_dir_omitted = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
-            #if os.path.exists("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted)):
-            #    print("no training and eval for", prop)
-            #else:
-        
             #train
-            model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
+            model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_omitted, omitted_props)
+            print("remove dir of model")
+            shutil.rmtree(model_path)
             result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {prop: {}}
             dictio["tested_prop"][prop]["omitted_prec@1"] = result_omitted[prop]
@@ -250,6 +241,10 @@ if __name__ == "__main__":
         #print("remaining props:", props, len(props))
         #props_pairs = [(props[i],props[j]) for i in range(len(props)) for j in range(i+1, len(props))]
         props_pairs = [(all_props[i],all_props[j]) for i in range(len(all_props)) for j in range(i+1, len(all_props))]
+        protocol["props_pairs"] = props_pairs
+        #save protocol
+        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+            json.dump(protocol, protocol_file, indent=4)
 
         #round2: omitt pairs of props
         round = "round2"
@@ -259,31 +254,21 @@ if __name__ == "__main__":
             omitted_props = list(pair)
             dictio = {}
             dictio["omitted_props"] = omitted_props
-            ##ONLY FOR THIS TIME, HAS TO BE CHANGED TODO
-            #if omitted_props:
-            #    props_string = "_"
-            #    omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
-            #    for prop in omitted_props: 
-            #        props_string = props_string + prop
-            #model_dir_omitted = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
-            #if os.path.exists("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted)):
-            #    print("no training and eval for", prop)
-            #else:
-
             #train
-            model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
+            model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_omitted, omitted_props)
+            print("remove dir of model")
+            shutil.rmtree(model_path)
             result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {}
             for prop in omitted_props:
                 dictio["tested_prop"][prop] = {}
                 dictio["tested_prop"][prop]["omitted_prec@1"] = result_omitted[prop]
             protocol[round].append(dictio)
-        
-        #save protocol
-        with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
-            json.dump(protocol, protocol_file, indent=4)
+            #save protocol
+            with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
+                json.dump(protocol, protocol_file, indent=4)
 
         #find groups
         dependent_props = {}
@@ -318,6 +303,7 @@ if __name__ == "__main__":
                     round2_omitted_prec = experiment["tested_prop"][prop]["omitted_prec@1"]
                     omitted_props = experiment["omitted_props"].copy()
                     omitted_props.remove(prop)
+                    #the smaller the value, the more the props support each other in transfer learning
                     graph[prop][omitted_props[0]] = round2_omitted_prec/round1_omitted_prec
         protocol["graph"] = graph
         #save protocol
@@ -325,6 +311,6 @@ if __name__ == "__main__":
             json.dump(protocol, protocol_file, indent=4)
     else:
         #train
-        model_dir = train(lm_name, train_file, sample, epoch, template, query_type, None)
+        model_path, model_dir = train(lm_name, train_file, sample, epoch, template, query_type, None)
         #evaluate with LAMA
-        start_custom_model_eval(model_dir)
+        start_custom_model_eval("BBCF_AUTOPROMPT41_all_obj_3_LAMA", None)

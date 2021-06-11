@@ -201,7 +201,7 @@ if __name__ == "__main__":
             json.dump(entity2label_trexlabel, f)
     
     
-    wikidata_train_dataset_path = "/data/kalo/akbc2021/training_datasets/wikidata41.json"
+    wikidata_train_dataset_path = "/data/kalo/akbc2021/training_datasets/wikidata41_all.json"
     if not os.path.exists(wikidata_train_dataset_path):
         print("create", wikidata_train_dataset_path)
         autoprompt_dataset_path = "/data/kalo/akbc2021/AUTOPROMPT/original/"
