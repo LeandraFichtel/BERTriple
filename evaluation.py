@@ -168,8 +168,8 @@ def start_custom_model_eval(model_dir, omitted_props):
             "bert_model_dir": "/home/fichtel/BERTriple/models/{}".format(model_dir),
         },
     ]
-    shutil.rmtree("/data/fichtel/BERTriple/LAMA_output/output/results/{}".format(model_dir))
     run_all_LMs(parameters, LMs)
+    shutil.rmtree("/data/fichtel/BERTriple/LAMA_output/output/results/{}".format(model_dir))
 
 
 if __name__ == "__main__":

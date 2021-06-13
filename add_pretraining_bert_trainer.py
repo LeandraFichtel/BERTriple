@@ -49,7 +49,7 @@ def prepare_dataset(dataset_path, query_type, sample, omitted_props):
         #prepare dataset
         print("create new dataset", dataset_path)
         dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-        with open(dataset_path.replace(sample, "all")) as dataset_file:
+        with open(dataset_path.replace("_"+sample, "_all")) as dataset_file:
             dataset = json.load(dataset_file)
             #take only a sample of the triples
             for queries_type in dataset:
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         lm_name_short = lm_name.split("-")
         lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
         props_string = ""
-        model_path_all_trained = "/data/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+        model_path_all_trained = "/home/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
         if not os.path.exists(model_path_all_trained):
             model_path, model_dir_all_trained = train(lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with LAMA
@@ -207,7 +207,6 @@ if __name__ == "__main__":
             if protocol[round]["tested_prop"][prop]["trained_prec@1"] > threshold * protocol[round]["tested_prop"][prop]["baseline_prec@1"]:
                 remaining_props.append(prop)
         protocol[round]["remaining_props"] = remaining_props
-        
         #round1: omitt props only seperately
         round = "round1"
         protocol[round] = []
@@ -313,4 +312,4 @@ if __name__ == "__main__":
         #train
         model_path, model_dir = train(lm_name, train_file, sample, epoch, template, query_type, None)
         #evaluate with LAMA
-        start_custom_model_eval("BBCF_AUTOPROMPT41_all_obj_3_LAMA", None)
+        start_custom_model_eval(model_dir, None)
