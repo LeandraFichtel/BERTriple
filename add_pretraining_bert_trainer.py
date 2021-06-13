@@ -238,9 +238,10 @@ if __name__ == "__main__":
         #        if experiment["tested_prop"][prop]["omitted_prec@1"] < threshold * experiment["tested_prop"][prop]["trained_prec@1"]:
         #            props.remove(prop)
         #print("remaining props:", props, len(props))
-        #props_pairs = [(props[i],props[j]) for i in range(len(props)) for j in range(i+1, len(props))]
-        props_pairs = [(all_props[i],all_props[j]) for i in range(len(all_props)) for j in range(i+1, len(all_props))]
+        props = protocol["round0"]["remaining_props"]
+        props_pairs = [(props[i],props[j]) for i in range(len(props)) for j in range(i+1, len(props))]
         protocol["props_pairs"] = props_pairs
+        print("Considering {} props pairs".format(len(props_pairs)))
         #save protocol
         with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}F_{}_{}_{}_{}_{}.json".format(lm_name_capitals, train_file, sample, query_type, epoch, template), "w+") as protocol_file:
             json.dump(protocol, protocol_file, indent=4)
@@ -257,7 +258,7 @@ if __name__ == "__main__":
             model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_omitted, omitted_props)
-            print("remove dir of model")
+            print("remove dir of model because it is no longer needed after round2")
             shutil.rmtree(model_path)
             result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(model_dir_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {}
