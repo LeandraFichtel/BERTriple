@@ -157,7 +157,7 @@ def run_thread(arguments):
         label_index=arguments["label_index"],
         index_list=arguments["index_list"],
         print_generation=arguments["interactive"],
-        topk=10000,
+        topk=10,
     )
     msg += "\n" + return_msg
 
@@ -307,8 +307,9 @@ def main(args, shuffle_data=True, model=None):
     msg = ""
 
     [model_type_name] = args.models_names
-
+    
     print(model)
+
     if model is None:
         model = build_model_by_name(model_type_name, args)
 
@@ -320,7 +321,7 @@ def main(args, shuffle_data=True, model=None):
         model_name = "ELMo_{}".format(args.elmo_model_name)
     else:
         model_name = model_type_name.title()
-
+    
     # initialize logging
     if args.full_logdir:
         log_directory = args.full_logdir
@@ -591,7 +592,23 @@ def main(args, shuffle_data=True, model=None):
             element["sample_Precision"] = sample_P
             element["sample_perplexity"] = sample_perplexity
             element["sample_Precision1"] = result_masked_topk["P_AT_1"]
-
+            if "_uhn" in args.result_dir:
+                with open("/home/fichtel/BERTriple/models/{}/logging_lama_uhn/{}".format(args.label, args.dataset_filename.split("/")[-1]), "a") as log_file:
+                    dictio = {}
+                    dictio["query"] = sample
+                    dictio["result"] = result_masked_topk["topk"][0]
+                    dictio["prec@1"] = result_masked_topk["P_AT_1"]
+                    json.dump(dictio, log_file)
+                    log_file.write("\n")
+            else:
+                with open("/home/fichtel/BERTriple/models/{}/logging_lama/{}".format(args.label, args.dataset_filename.split("/")[-1]), "a") as log_file:
+                    dictio = {}
+                    dictio["query"] = sample
+                    dictio["result"] = result_masked_topk["topk"][0]
+                    dictio["prec@1"] = result_masked_topk["P_AT_1"]
+                    json.dump(dictio, log_file)
+                    log_file.write("\n")
+            
             # print()
             # print("idx: {}".format(idx))
             # print("masked_entity: {}".format(result_masked_topk['masked_entity']))

@@ -23,13 +23,7 @@ def run_experiments(
     relations,
     data_path_pre,
     data_path_post,
-    input_param={
-        "lm": "bert",
-        "label": "bert_large",
-        "models_names": ["bert"],
-        "bert_model_name": "bert-large-cased",
-        "bert_model_dir": "LAMA/pre-trained_language_models/bert/cased_L-24_H-1024_A-16",
-    },
+    input_param,
     use_negated_probes=False,
 ):
     model = None
@@ -40,7 +34,7 @@ def run_experiments(
     type_count = defaultdict(list)
 
     last_results_file = open("LAMA/last_results.csv", "w+")
-    results_file = open("/home/fichtel/BERTriple/results/{}.csv".format(input_param["label"]), "w+")
+    results_file = open("/home/fichtel/BERTriple/results/{}.csv".format(input_param["result_dir"]), "w+")
 
     print("evaluating {} props".format(len(relations)))
     for relation in relations:
@@ -55,7 +49,7 @@ def run_experiments(
             "batch_size": 32,
             "logdir": "/data/fichtel/BERTriple/LAMA_output/output",
             "full_logdir": "/data/fichtel/BERTriple/LAMA_output/output/results/{}/{}".format(
-                input_param["label"], relation["relation"]
+                input_param["result_dir"], relation["relation"]
             ),
             "lowercase": False,
             "max_sentence_length": 100,
@@ -150,26 +144,47 @@ def get_TREx_parameters(omitted_props, data_path_pre="LAMA/data/"):
     data_path_post = ".jsonl"
     return relations, data_path_pre, data_path_post
 
+def get_TREx_uhn_parameters(omitted_props, data_path_pre="LAMA/data/"):
+    relations = load_file("{}relations.jsonl".format(data_path_pre))
+    #only evaluate omitted props to save computational time
+    if omitted_props:
+        relations_copy = relations.copy()
+        for relation in relations:
+            if relation["relation"] not in omitted_props:
+                relations_copy.remove(relation)
+        relations = relations_copy
+    data_path_pre += "TREx_UHN/"
+    data_path_post = ".jsonl"
+    return relations, data_path_pre, data_path_post
+
 
 def run_all_LMs(parameters, LMs):
     for ip in LMs:
         print(ip["label"])
         run_experiments(*parameters, input_param=ip, use_negated_probes=False)
 
-def start_custom_model_eval(model_dir, omitted_props):
-    print("T-REx evaluation: our models")
-    parameters = get_TREx_parameters(omitted_props)
+def start_custom_model_eval(model_dir, omitted_props, lama_uhn):
+    if lama_uhn:
+        print("T-REx UHN evaluation: our models")
+        parameters = get_TREx_uhn_parameters(omitted_props)
+        result_dir = model_dir + "_uhn"
+    else:
+        print("T-REx evaluation: our models")
+        parameters = get_TREx_parameters(omitted_props)
+        result_dir = model_dir
     LMs = [
         {
             "lm": "bert",
             "label": model_dir,
+            "result_dir": result_dir,
             "models_names": ["bert"],
             "bert_model_name": "bert-base-cased-finetuned",
             "bert_model_dir": "/home/fichtel/BERTriple/models/{}".format(model_dir),
         },
     ]
     run_all_LMs(parameters, LMs)
-    shutil.rmtree("/data/fichtel/BERTriple/LAMA_output/output/results/{}".format(model_dir))
+    shutil.rmtree("/data/fichtel/BERTriple/LAMA_output/output/results/{}".format(result_dir))
+    return result_dir
 
 
 if __name__ == "__main__":
