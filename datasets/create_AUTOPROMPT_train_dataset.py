@@ -64,7 +64,7 @@ def get_train_data(path_autoprompt_dataset, train_dataset_file, vocab):
 
 if __name__ == "__main__":
     path_autoprompt_dataset = "/data/kalo/akbc2021/AUTOPROMPT/original/"
-    vocab_file = "/home/fichtel/BERTriple/LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt"
+    vocab_file = "../LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt"
     with open(vocab_file, "r") as f:
         vocab = set()
         for line in f:

@@ -21,10 +21,7 @@ if __name__ == "__main__":
     #my 25 props
     props = ['P17', 'P19', 'P27', 'P31', 'P47', 'P106', 'P127', 'P131', 'P136', 'P138', 'P159', 'P190', 'P264', 'P276', 'P279', 'P361', 'P364', 'P407', 'P449', 'P463', 'P495', 'P527', 'P530', 'P740', 'P1303']
     
-    if path.exists("/data/kalo/akbc2021/training_datasets/LPAQAfiltered{}_all.json".format(len(props))):
-        print("removed /data/kalo/akbc2021/training_datasets/LPAQAfiltered{}_all.json".format(len(props)))
-        os.remove("/data/kalo/akbc2021/training_datasets/LPAQAfiltered{}_all.json".format(len(props)))
-    LPAQA_train_filtered_file = open("/data/kalo/akbc2021/training_datasets/LPAQAfiltered{}_all.json".format(len(props)), "w")
+    LPAQA_train_filtered_file = open("/data/kalo/akbc2021/training_datasets/LPAQAfiltered{}_all.json".format(len(props)), "w+")
     
     LPAQA_train_filtered = {}
     LPAQA_train_filtered["subj_queries"] = {}

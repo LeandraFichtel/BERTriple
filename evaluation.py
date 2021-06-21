@@ -188,22 +188,54 @@ def start_custom_model_eval(model_dir, omitted_props, lama_uhn):
 
 
 if __name__ == "__main__":
-    print("T-REx evaluation: baseline")
+    #print("T-REx evaluation: baseline")
+    model_path = "LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/"
+    if os.path.exists(model_path+"/logging_lama"):
+        print("remove logging dir of model")
+        shutil.rmtree(model_path)
+    if os.path.exists(model_path+"/logging_lama_uhn"):
+        print("remove logging dir of model")
+        shutil.rmtree(model_path)
+    os.mkdir(model_path+"/logging_lama")
+    os.mkdir(model_path+"/logging_lama_uhn")
     parameters = get_TREx_parameters(None)
     LMs = [
         {
             "lm": "bert",
             "label": "bert_base_label",
+            "result_dir": "bert_base_label",
             "models_names": ["bert"],
             "bert_model_name": "bert-base-cased",
-            "bert_model_dir": "LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12",
+            "bert_model_dir": model_path,
         },
         {
             "lm": "bert",
             "label": "bert_base_LAMA",
+            "result_dir": "bert_base_LAMA",
             "models_names": ["bert"],
             "bert_model_name": "bert-base-cased",
-            "bert_model_dir": "LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12",
+            "bert_model_dir": model_path,
+        },
+    ]
+    run_all_LMs(parameters, LMs)
+    print("T-REx UHN evaluation: baseline")
+    parameters = get_TREx_uhn_parameters(None)
+    LMs = [
+        {
+            "lm": "bert",
+            "label": "bert_base_label",
+            "models_names": ["bert"],
+            "result_dir": "bert_base_label_uhn",
+            "bert_model_name": "bert-base-cased",
+            "bert_model_dir": model_path,
+        },
+        {
+            "lm": "bert",
+            "label": "bert_base_LAMA",
+            "result_dir": "bert_base_LAMA_uhn",
+            "models_names": ["bert"],
+            "bert_model_name": "bert-base-cased",
+            "bert_model_dir": model_path,
         },
     ]
     run_all_LMs(parameters, LMs)

@@ -592,8 +592,9 @@ def main(args, shuffle_data=True, model=None):
             element["sample_Precision"] = sample_P
             element["sample_perplexity"] = sample_perplexity
             element["sample_Precision1"] = result_masked_topk["P_AT_1"]
+            
             if "_uhn" in args.result_dir:
-                with open("/home/fichtel/BERTriple/models/{}/logging_lama_uhn/{}".format(args.label, args.dataset_filename.split("/")[-1]), "a") as log_file:
+                with open("{}/logging_lama_uhn/{}".format(args.bert_model_dir, args.dataset_filename.split("/")[-1]), "a") as log_file:
                     dictio = {}
                     dictio["query"] = sample
                     dictio["result"] = result_masked_topk["topk"][0]
@@ -601,7 +602,7 @@ def main(args, shuffle_data=True, model=None):
                     json.dump(dictio, log_file)
                     log_file.write("\n")
             else:
-                with open("/home/fichtel/BERTriple/models/{}/logging_lama/{}".format(args.label, args.dataset_filename.split("/")[-1]), "a") as log_file:
+                with open("{}/logging_lama/{}".format(args.bert_model_dir, args.dataset_filename.split("/")[-1]), "a") as log_file:
                     dictio = {}
                     dictio["query"] = sample
                     dictio["result"] = result_masked_topk["topk"][0]
