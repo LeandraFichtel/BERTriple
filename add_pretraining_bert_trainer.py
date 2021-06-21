@@ -162,7 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('-template', help="set which template should be used (LAMA or label)")
     parser.add_argument('-query_type', help="set which queries should be used during training (subjobj= subject and object queries, subj= only subject queries, obj= only object queries)")
     parser.add_argument('-transfer_learning', action="store_true", default=False, help="enables one the fly training data creation for transferlearning")
-    parser.add_argument('-LAMA_UHN', action="store_true", default=False, help="set this flag to evaluate only on the filtered LAMA UHN dataset")
+    parser.add_argument('-LAMA_UHN', action="store_true", default=False, help="set this flag to evaluate also the filtered LAMA UHN dataset")
 
     args = parser.parse_args()
     print(args)
@@ -244,4 +244,6 @@ if __name__ == "__main__":
         #props_string = ""
         #model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
         #evaluate with LAMA
-        result_file_name = start_custom_model_eval(model_dir, None, lama_uhn)
+        result_file_name = start_custom_model_eval(model_dir, None, False)
+	if lama_uhn:
+            result_file_name = start_custom_model_eval(model_dir, None, lama_uhn=True)

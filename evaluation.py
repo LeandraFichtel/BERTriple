@@ -188,14 +188,14 @@ def start_custom_model_eval(model_dir, omitted_props, lama_uhn):
 
 
 if __name__ == "__main__":
-    #print("T-REx evaluation: baseline")
-    model_path = "LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/"
+    print("T-REx evaluation: baseline")
+    model_path = "LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12"
     if os.path.exists(model_path+"/logging_lama"):
-        print("remove logging dir of model")
-        shutil.rmtree(model_path)
+        print("remove logging lama dir of model")
+        shutil.rmtree(model_path+"/logging_lama")
     if os.path.exists(model_path+"/logging_lama_uhn"):
-        print("remove logging dir of model")
-        shutil.rmtree(model_path)
+        print("remove logging lama uhn dir of model")
+        shutil.rmtree(model_path+"/logging_lama_uhn")
     os.mkdir(model_path+"/logging_lama")
     os.mkdir(model_path+"/logging_lama_uhn")
     parameters = get_TREx_parameters(None)
