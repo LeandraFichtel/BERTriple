@@ -42,7 +42,8 @@ def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
                     answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
     return queries, answers
 
-def prepare_dataset(dataset_path, query_type, sample, omitted_props):
+def prepare_dataset(index, train_file, query_type, sample, omitted_props):
+    dataset_path = "/data/kalo/akbc2021/training_datasets/{}{}_{}.json".format(index, train_file, sample)
     if os.path.exists(dataset_path):
         print("read given dataset", dataset_path)
         with open(dataset_path, "r") as dataset_file:
@@ -51,7 +52,8 @@ def prepare_dataset(dataset_path, query_type, sample, omitted_props):
         #prepare dataset
         print("create new dataset", dataset_path)
         dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-        with open(dataset_path.replace("_"+sample, "_all")) as dataset_file:
+        dataset_all_path = "/data/kalo/akbc2021/training_datasets/{}_all.json".format(train_file)
+        with open(dataset_all_path) as dataset_file:
             dataset = json.load(dataset_file)
             #take only a sample of the triples
             for queries_type in dataset:
@@ -94,8 +96,8 @@ class MaskedDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.labels)
 
-def train(lm_name, train_file, sample, epoch, template, query_type, omitted_props):
-    train_queries, train_answers = prepare_dataset("/data/kalo/akbc2021/training_datasets/{}_{}.json".format(train_file, sample), query_type, sample, omitted_props)
+def train(index, lm_name, train_file, sample, epoch, template, query_type, omitted_props):
+    train_queries, train_answers = prepare_dataset(index, train_file, query_type, sample, omitted_props)
     print("check datapoint with {} template:".format(template), train_queries[0], train_answers[0])
     #use tokenizer to get encodings
     tokenizer = BertTokenizer.from_pretrained(lm_name)
@@ -115,7 +117,7 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     else:
         props_string = ""
     
-    model_path = "/home/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+    model_path = "/home/fichtel/BERTriple/models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
     
     if os.path.exists(model_path):
         print("remove dir of model")
@@ -152,14 +154,14 @@ def train(lm_name, train_file, sample, epoch, template, query_type, omitted_prop
     return model_path, model_path.split("/")[-1]
 
 if __name__ == "__main__":
-    #os.environ['CUDA_VISIBLE_DEVICES'] = "1"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "1"
     dictio_prop_template = json.load(open("/data/fichtel/BERTriple/templates.json", "r"))
     #parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('-train_file', help="training dataset name (LPAQAfiltered41/LPAQAfiltered25 or wikidata41/wikidata25)")
+    parser.add_argument('-train_file', help="training dataset name (AUTOPROMPT41)")
     parser.add_argument('-sample', help="set how many triple should be used of each property at maximum (e.g. 500 (=500 triples per prop for each query type) or all (= all given triples per prop for each query type))")
     parser.add_argument('-epoch', help="set how many epoches should be executed")
-    parser.add_argument('-template', help="set which template should be used (LAMA or label)")
+    parser.add_argument('-template', help="set which template should be used (LAMA or label or ID)")
     parser.add_argument('-query_type', help="set which queries should be used during training (subjobj= subject and object queries, subj= only subject queries, obj= only object queries)")
     parser.add_argument('-transfer_learning', action="store_true", default=False, help="enables one the fly training data creation for transferlearning")
     parser.add_argument('-LAMA_UHN', action="store_true", default=False, help="set this flag to evaluate also the filtered LAMA UHN dataset")
@@ -188,7 +190,7 @@ if __name__ == "__main__":
         props_string = ""
         model_path_all_trained = "/home/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
         if not os.path.exists(model_path_all_trained):
-            model_path, model_dir_all_trained = train(lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path, model_dir_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_all_trained)
         else:
@@ -237,13 +239,17 @@ if __name__ == "__main__":
             with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}.json".format(result_file_name), "w+") as protocol_file:
                 json.dump(protocol, protocol_file, indent=4)
     else:
-        #train
-        model_path, model_dir = train(lm_name, train_file, sample, epoch, template, query_type, None)
-        #lm_name_short = lm_name.split("-")
-        #lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
-        #props_string = ""
-        #model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
-        #evaluate with LAMA
-        result_file_name = start_custom_model_eval(model_dir, None, False)
-	if lama_uhn:
-            result_file_name = start_custom_model_eval(model_dir, None, lama_uhn=True)
+        for index in ["", "2_", "3_"]:
+            #train
+            model_path, model_dir = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
+            #lm_name_short = lm_name.split("-")
+            #lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
+            #props_string = ""
+            #model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+            #evaluate with LAMA
+            result_file_name = start_custom_model_eval(model_dir, None, False)
+            if lama_uhn:
+                result_file_name = start_custom_model_eval(model_dir, None, lama_uhn=True)
+            if sample == "all":
+                #because all triples are used during training, there is no need for a second and third run
+                break

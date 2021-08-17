@@ -69,8 +69,14 @@ def run_experiments(
                 templates = json.load(template__file)
                 PARAMETERS["template"] = templates[relation["relation"]]["label"]
                 print(PARAMETERS["template"])
+        elif "ID" in input_param["label"]:
+            print("using ID templates")
+            with open("/data/fichtel/BERTriple/templates.json", "r") as template__file:
+                templates = json.load(template__file)
+                PARAMETERS["template"] = templates[relation["relation"]]["ID"]
+                print(PARAMETERS["template"])
         else:
-            exit("Choose only between LAMA templates or label templates!")
+            exit("Choose only between LAMA templates or label templates or ID templates!")
 
         PARAMETERS.update(input_param)
         #print(PARAMETERS)

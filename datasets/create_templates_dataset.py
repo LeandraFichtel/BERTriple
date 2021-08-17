@@ -14,6 +14,7 @@ def get_dictio_prop_data():
         dictio_prop_template[prop] = {}
         dictio_prop_template[prop]["LAMA"] = template
         dictio_prop_template[prop]["label"] = "[X] {} [Y] .".format(label)
+        dictio_prop_template[prop]["ID"] = "[X] {} [Y] .".format(prop)
     return dictio_prop_template
 
 if __name__ == '__main__':
