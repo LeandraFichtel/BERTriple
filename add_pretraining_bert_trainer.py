@@ -107,8 +107,13 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     train_dataset = MaskedDataset(train_question_encodings, train_answer_encodings)
     
     print("start training")
-    lm_name_short = lm_name.split("-")
-    lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
+    initials = lm_name.split("-")
+    lm_name_capitals = ""
+    for i, initial in enumerate(initials):
+        if i == 0:
+            lm_name_capitals = initial
+        else:
+            lm_name_capitals = lm_name_capitals + initial.upper()[0]
     if omitted_props:
         props_string = "_"
         omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
@@ -117,7 +122,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     else:
         props_string = ""
     
-    model_path = "/home/fichtel/BERTriple/models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+    model_path = "models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
     
     if os.path.exists(model_path):
         print("remove dir of model")
@@ -149,7 +154,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
 
     trainer.train()
     trainer.save_model(model_path)
-    copyfile("/home/fichtel/BERTriple/LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt", model_path + "/vocab.txt")
+    copyfile("LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt", model_path + "/vocab.txt")
     os.rename(model_path + "/config.json", model_path + "/bert_config.json")
     return model_path, model_path.split("/")[-1]
 
@@ -164,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument('-template', help="set which template should be used (LAMA or label or ID)")
     parser.add_argument('-query_type', help="set which queries should be used during training (subjobj= subject and object queries, subj= only subject queries, obj= only object queries)")
     parser.add_argument('-transfer_learning', action="store_true", default=False, help="enables one the fly training data creation for transferlearning")
-    parser.add_argument('-LAMA_UHN', action="store_true", default=False, help="set this flag to evaluate also the filtered LAMA UHN dataset")
+    parser.add_argument('-lama_uhn', action="store_true", default=False, help="set this flag to evaluate also the filtered LAMA UHN dataset (not possible at transfer learning experiment)")
 
     args = parser.parse_args()
     print(args)
@@ -175,47 +180,43 @@ if __name__ == "__main__":
     query_type = args.query_type
     assert(query_type in ["subjobj", "subj", "obj"])
     transfer_learning = args.transfer_learning
-    lama_uhn = args.LAMA_UHN
+    lama_uhn = args.lama_uhn
 
     #used LM
     lm_name = 'bert-base-cased'  
     
     if transfer_learning:
         #get results of baseline (bert-base-cased)
-        result_baseline = dict((pd.read_csv('/home/fichtel/BERTriple/results/bert_base_{}.csv'.format(template), sep = ',', header = None)).values)
+        result_baseline = dict((pd.read_csv('BERTriple/results/bert_base_{}.csv'.format(template), sep = ',', header = None)).values)
         
         #train all props if it was not already done with this setup
         lm_name_short = lm_name.split("-")
         lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
         props_string = ""
-        model_path_all_trained = "/home/fichtel/BERTriple/models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+        model_path_all_trained = "models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
         if not os.path.exists(model_path_all_trained):
             model_path, model_dir_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with LAMA
             start_custom_model_eval(model_dir_all_trained)
         else:
             model_dir_all_trained = model_path_all_trained.split("/")[-1]
-        result_all_trained = dict((pd.read_csv('/home/fichtel/BERTriple/results/{}{}.csv'.format(model_dir_all_trained, lama_uhn), sep = ',', header = None)).values)
+        result_all_trained = dict((pd.read_csv('results/{}{}.csv'.format(model_dir_all_trained, lama_uhn), sep = ',', header = None)).values)
 
         #procotol to save the process of the transfer learning experiment
         protocol = {}
         all_props = ["P1001", "P106", "P1303", "P1376", "P1412", "P178", "P19", "P276", "P30", "P364", "P39", "P449", "P495", "P740", "P101", "P108", "P131", "P138", "P159", "P17", "P20", "P279", "P31", "P36", "P407", "P463", "P527", "P937", "P103", "P127", "P136", "P140", "P176", "P190", "P264", "P27", "P361", "P37", "P413", "P47", "P530"]
         
-        #round0: remove props that have no prec@1 improvement after fine-tuning compared to baseline
+        #round0: get precision of baseline and after fine-tuning with all props
         round = "round0"
         protocol[round] = {}
         protocol[round]["tested_prop"] = {}
         threshold = 1.1
-        #props = all_props.copy()
-        #remaining_props = []
         for prop in all_props:
             protocol[round]["tested_prop"][prop] = {}
             protocol[round]["tested_prop"][prop]["baseline_prec@1"] = result_baseline[prop]
             protocol[round]["tested_prop"][prop]["trained_prec@1"] = result_all_trained[prop]
-            #if protocol[round]["tested_prop"][prop]["trained_prec@1"] > threshold * protocol[round]["tested_prop"][prop]["baseline_prec@1"]:
-            #    remaining_props.append(prop)
-        #protocol[round]["remaining_props"] = remaining_props
-        #round1: omitt props only seperately
+
+        #round1: omitt props seperately
         round = "round1"
         protocol[round] = []
         #remaining_props = protocol["round0"]["remaining_props"]
@@ -227,29 +228,25 @@ if __name__ == "__main__":
             #train
             model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props, lama_uhn)
             #evaluate with LAMA
-            result_file_name = start_custom_model_eval(model_dir_omitted, omitted_props, lama_uhn)
+            result_file_name = start_custom_model_eval(model_dir_omitted, omitted_props)
             print("remove dir of model")
             shutil.rmtree(model_path)
-            result_omitted = dict((pd.read_csv("/home/fichtel/BERTriple/results/{}.csv".format(result_file_name), sep = ',', header = None)).values)
+            result_omitted = dict((pd.read_csv("results/{}.csv".format(result_file_name), sep = ',', header = None)).values)
             dictio["tested_prop"] = {prop: {}}
             dictio["tested_prop"][prop]["omitted_prec@1"] = result_omitted[prop]
             protocol[round].append(dictio)
         
             #save protocol
-            with open("/home/fichtel/BERTriple/results/transfer_learning_protocols/{}.json".format(result_file_name), "w+") as protocol_file:
+            with open("results/transfer_learning_protocols/{}.json".format(result_file_name), "w+") as protocol_file:
                 json.dump(protocol, protocol_file, indent=4)
     else:
         for index in ["", "2_", "3_"]:
             #train
             model_path, model_dir = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
-            #lm_name_short = lm_name.split("-")
-            #lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
-            #props_string = ""
-            #model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
             #evaluate with LAMA
-            result_file_name = start_custom_model_eval(model_dir, None, False)
+            result_file_name = start_custom_model_eval(model_dir)
             if lama_uhn:
-                result_file_name = start_custom_model_eval(model_dir, None, lama_uhn=True)
+                result_file_name = start_custom_model_eval(model_dir, lama_uhn=True)
             if sample == "all":
                 #because all triples are used during training, there is no need for a second and third run
                 break
