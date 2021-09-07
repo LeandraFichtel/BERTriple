@@ -1,7 +1,6 @@
 import torch
-from transformers import BertForMaskedLM, BertModel, Trainer, TrainingArguments
+from transformers import AutoModelForMaskedLM, AutoTokenizer, pipeline, Trainer, TrainingArguments
 import json
-from transformers import BertTokenizer
 import os
 import shutil
 import argparse
@@ -11,13 +10,16 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from itertools import chain, combinations
-from evaluation import start_custom_model_eval
+from evaluation import start_evaluation
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 #functions
-def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
+def get_queries_answers(dictio_prop_triple, lm_name_initials, query_type, template, omitted_props):
+    model_path = "models/baselines/{}_{}".format(lm_name_initials, template)
+    fill_mask = pipeline("fill-mask", model=model_path)
+    
     queries = []
     answers = []
     print("omitted props:", omitted_props)
@@ -35,15 +37,16 @@ def get_queries_answers(dictio_prop_triple, query_type, omitted_props):
                 obj_label = datapoint["obj"]
                 query_template = dictio_prop_template[prop][template]
                 if query_type == "subj_queries":
-                    queries.append(query_template.replace("[X]", "[MASK]").replace("[Y]", obj_label))
+                    queries.append(query_template.replace("[X]", fill_mask.tokenizer.mask_token).replace("[Y]", obj_label))
                     answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
                 elif query_type == "obj_queries":
-                    queries.append(query_template.replace("[X]", subj_label).replace("[Y]", "[MASK]"))
+                    queries.append(query_template.replace("[X]", subj_label).replace("[Y]", fill_mask.tokenizer.mask_token))
                     answers.append(query_template.replace("[X]", subj_label).replace("[Y]", obj_label))
+    del fill_mask
     return queries, answers
 
-def prepare_dataset(index, train_file, query_type, sample, omitted_props):
-    dataset_path = "/data/kalo/akbc2021/training_datasets/{}{}_{}.json".format(index, train_file, sample)
+def prepare_dataset(index, lm_name_initials, train_file, sample, query_type, template, omitted_props):
+    dataset_path = "data/train_datasets/{}{}_{}.json".format(index, train_file, sample)
     if os.path.exists(dataset_path):
         print("read given dataset", dataset_path)
         with open(dataset_path, "r") as dataset_file:
@@ -52,7 +55,7 @@ def prepare_dataset(index, train_file, query_type, sample, omitted_props):
         #prepare dataset
         print("create new dataset", dataset_path)
         dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-        dataset_all_path = "/data/kalo/akbc2021/training_datasets/{}_all.json".format(train_file)
+        dataset_all_path = "data/train_datasets/{}_all.json".format(train_file)
         with open(dataset_all_path) as dataset_file:
             dataset = json.load(dataset_file)
             #take only a sample of the triples
@@ -69,18 +72,18 @@ def prepare_dataset(index, train_file, query_type, sample, omitted_props):
     all_queries = []
     all_answers = []
     if query_type == "subjobj":
-        queries, answers = get_queries_answers(dictio_prop_triple, "subj_queries", omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "subj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
-        queries, answers = get_queries_answers(dictio_prop_triple, "obj_queries", omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "obj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     elif query_type == "subj":
-        queries, answers = get_queries_answers(dictio_prop_triple, "subj_queries", omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "subj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     elif query_type == "obj":
-        queries, answers = get_queries_answers(dictio_prop_triple, "obj_queries", omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "obj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     return all_queries, all_answers
@@ -96,24 +99,28 @@ class MaskedDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.labels)
 
+def get_initials(lm_name):
+    lm_name_initials = ""
+    initials = lm_name.replace("/", "").split("-")
+    for i, initial in enumerate(initials):
+        if i == 0:
+            lm_name_initials = initial
+        else:
+            lm_name_initials = lm_name_initials + initial.upper()[0]
+    return lm_name_initials
+
 def train(index, lm_name, train_file, sample, epoch, template, query_type, omitted_props):
-    train_queries, train_answers = prepare_dataset(index, train_file, query_type, sample, omitted_props)
+    lm_name_initials = get_initials(lm_name)
+    train_queries, train_answers = prepare_dataset(index, lm_name_initials, train_file, sample, query_type, template, omitted_props)
     print("check datapoint with {} template:".format(template), train_queries[0], train_answers[0])
     #use tokenizer to get encodings
-    tokenizer = BertTokenizer.from_pretrained(lm_name)
+    tokenizer = AutoTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
     train_answer_encodings = tokenizer(train_answers, truncation=True, padding='max_length', max_length=256)["input_ids"]
     #get final datasets for training
     train_dataset = MaskedDataset(train_question_encodings, train_answer_encodings)
     
     print("start training")
-    initials = lm_name.split("-")
-    lm_name_capitals = ""
-    for i, initial in enumerate(initials):
-        if i == 0:
-            lm_name_capitals = initial
-        else:
-            lm_name_capitals = lm_name_capitals + initial.upper()[0]
     if omitted_props:
         props_string = "_"
         omitted_props = sorted(omitted_props, key=lambda x: int("".join([i for i in x if i.isdigit()])))
@@ -122,14 +129,12 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     else:
         props_string = ""
     
-    model_path = "models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+    model_path = "models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
     
     if os.path.exists(model_path):
         print("remove dir of model")
         shutil.rmtree(model_path)
     os.mkdir(model_path)
-    os.mkdir(model_path+"/logging_lama")
-    os.mkdir(model_path+"/logging_lama_uhn")
     
     training_args = TrainingArguments(
     output_dir=model_path+'/results',          # output directory
@@ -143,8 +148,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     save_total_limit=0,
     save_strategy="no"
     )
-    
-    model = BertForMaskedLM.from_pretrained(lm_name)
+    model = AutoModelForMaskedLM.from_pretrained("models/baselines/{}_{}".format(lm_name_initials, template))
 
     trainer = Trainer(
     model=model,                         # the instantiated 🤗 Transformers model to be trained
@@ -154,15 +158,16 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
 
     trainer.train()
     trainer.save_model(model_path)
-    copyfile("LAMA/pre-trained_language_models/bert/cased_L-12_H-768_A-12/vocab.txt", model_path + "/vocab.txt")
-    os.rename(model_path + "/config.json", model_path + "/bert_config.json")
-    return model_path, model_path.split("/")[-1]
+    tokenizer.save_pretrained(model_path)
+    result_path = "results/"+lm_name_initials+"_"+template
+    return model_path, result_path
 
 if __name__ == "__main__":
-    os.environ['CUDA_VISIBLE_DEVICES'] = "1"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     dictio_prop_template = json.load(open("/data/fichtel/BERTriple/templates.json", "r"))
     #parser
     parser = argparse.ArgumentParser()
+    parser.add_argument('-lm_name', help="name of the model which should be fine-tuned (use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html)")
     parser.add_argument('-train_file', help="training dataset name (AUTOPROMPT41)")
     parser.add_argument('-sample', help="set how many triple should be used of each property at maximum (e.g. 500 (=500 triples per prop for each query type) or all (= all given triples per prop for each query type))")
     parser.add_argument('-epoch', help="set how many epoches should be executed")
@@ -173,31 +178,30 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     print(args)
+    lm_name = args.lm_name
     train_file = args.train_file
     epoch = int(args.epoch)
     template = args.template
+    assert template in ["LAMA", "label", "ID"]
     sample = args.sample
     query_type = args.query_type
-    assert(query_type in ["subjobj", "subj", "obj"])
+    assert query_type in ["subjobj", "subj", "obj"]
     transfer_learning = args.transfer_learning
     lama_uhn = args.lama_uhn
 
-    #used LM
-    lm_name = 'bert-base-cased'  
-    
     if transfer_learning:
+        #TODO adapt to hf
         #get results of baseline (bert-base-cased)
         result_baseline = dict((pd.read_csv('BERTriple/results/bert_base_{}.csv'.format(template), sep = ',', header = None)).values)
         
         #train all props if it was not already done with this setup
-        lm_name_short = lm_name.split("-")
-        lm_name_capitals = lm_name_short[0].upper()[0] + lm_name_short[1].upper()[0] + lm_name_short[2].upper()[0]
+        lm_name_initials = get_initials(lm_name)
         props_string = ""
-        model_path_all_trained = "models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_capitals, train_file, sample, query_type, epoch, template, props_string)
+        model_path_all_trained = "models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
         if not os.path.exists(model_path_all_trained):
             model_path, model_dir_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with LAMA
-            start_custom_model_eval(model_dir_all_trained)
+            start_evaluation(model_dir_all_trained)
         else:
             model_dir_all_trained = model_path_all_trained.split("/")[-1]
         result_all_trained = dict((pd.read_csv('results/{}{}.csv'.format(model_dir_all_trained, lama_uhn), sep = ',', header = None)).values)
@@ -228,7 +232,7 @@ if __name__ == "__main__":
             #train
             model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props, lama_uhn)
             #evaluate with LAMA
-            result_file_name = start_custom_model_eval(model_dir_omitted, omitted_props)
+            result_file_name = start_evaluation(template, model_dir_omitted, omitted_props)
             print("remove dir of model")
             shutil.rmtree(model_path)
             result_omitted = dict((pd.read_csv("results/{}.csv".format(result_file_name), sep = ',', header = None)).values)
@@ -242,11 +246,12 @@ if __name__ == "__main__":
     else:
         for index in ["", "2_", "3_"]:
             #train
-            model_path, model_dir = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path, result_path = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
+            
             #evaluate with LAMA
-            result_file_name = start_custom_model_eval(model_dir)
+            result_file_name = start_evaluation(template, model_path, result_path)
             if lama_uhn:
-                result_file_name = start_custom_model_eval(model_dir, lama_uhn=True)
+                result_file_name = start_evaluation(template, model_path, result_path, lama_uhn=True)
             if sample == "all":
                 #because all triples are used during training, there is no need for a second and third run
                 break
