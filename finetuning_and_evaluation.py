@@ -4,12 +4,8 @@ import json
 import os
 import shutil
 import argparse
-from shutil import copyfile
 import random
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-from itertools import chain, combinations
 from evaluation import start_evaluation
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -117,7 +113,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     tokenizer = AutoTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
     train_answer_encodings = tokenizer(train_answers, truncation=True, padding='max_length', max_length=256)["input_ids"]
-    #get final datasets for training
+    #get final dataset for training
     train_dataset = MaskedDataset(train_question_encodings, train_answer_encodings)
     
     print("start training")
@@ -129,15 +125,15 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     else:
         props_string = ""
     
-    model_path = "models/{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
-    
+    model_dir = "{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
+    model_path = "models/"+model_dir
     if os.path.exists(model_path):
         print("remove dir of model")
         shutil.rmtree(model_path)
     os.mkdir(model_path)
     
     training_args = TrainingArguments(
-    output_dir=model_path+'/results',          # output directory
+    output_dir=model_path+'/results', # output directory
     num_train_epochs=epoch,           # total number of training epochs
     per_device_train_batch_size=16,   # batch size per device during training
     per_device_eval_batch_size=64,    # batch size for evaluation
@@ -159,8 +155,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     trainer.train()
     trainer.save_model(model_path)
     tokenizer.save_pretrained(model_path)
-    result_path = "results/"+lm_name_initials+"_"+template
-    return model_path, result_path
+    return model_path, model_dir
 
 if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
@@ -173,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('-epoch', help="set how many epoches should be executed")
     parser.add_argument('-template', help="set which template should be used (LAMA or label or ID)")
     parser.add_argument('-query_type', help="set which queries should be used during training (subjobj= subject and object queries, subj= only subject queries, obj= only object queries)")
-    parser.add_argument('-transfer_learning', action="store_true", default=False, help="enables one the fly training data creation for transferlearning")
+    parser.add_argument('-transfer_learning', action="store_true", default=False, help="enables on-the-fly training data creation for transfer learning experiment")
     parser.add_argument('-lama_uhn', action="store_true", default=False, help="set this flag to evaluate also the filtered LAMA UHN dataset (not possible at transfer learning experiment)")
 
     args = parser.parse_args()
@@ -190,21 +185,21 @@ if __name__ == "__main__":
     lama_uhn = args.lama_uhn
 
     if transfer_learning:
-        #TODO adapt to hf
-        #get results of baseline (bert-base-cased)
-        result_baseline = dict((pd.read_csv('BERTriple/results/bert_base_{}.csv'.format(template), sep = ',', header = None)).values)
+        lm_name_initials = get_initials(lm_name)
+        #get results of baseline
+        results_baseline = dict((pd.read_csv('results/baselines/{}_{}.csv'.format(lm_name_initials, template), sep = ',', header = None)).values)
         
         #train all props if it was not already done with this setup
-        lm_name_initials = get_initials(lm_name)
         props_string = ""
-        model_path_all_trained = "models/{}F_{}_{}_{}_{}_{}{}".format(lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
+        model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
+        model_path_all_trained = "models/"+model_dir
         if not os.path.exists(model_path_all_trained):
-            model_path, model_dir_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
-            #evaluate with LAMA
-            start_evaluation(model_dir_all_trained)
+            model_path_all_trained, results_file_name_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
+            #evaluate with huggingface
+            start_evaluation(template, model_path_all_trained, results_file_name_all_trained)
         else:
-            model_dir_all_trained = model_path_all_trained.split("/")[-1]
-        result_all_trained = dict((pd.read_csv('results/{}{}.csv'.format(model_dir_all_trained, lama_uhn), sep = ',', header = None)).values)
+            results_file_name_all_trained = model_dir
+        results_all_trained = dict((pd.read_csv('results/{}.csv'.format(results_file_name_all_trained), sep = ',', header = None)).values)
 
         #procotol to save the process of the transfer learning experiment
         protocol = {}
@@ -217,41 +212,40 @@ if __name__ == "__main__":
         threshold = 1.1
         for prop in all_props:
             protocol[round]["tested_prop"][prop] = {}
-            protocol[round]["tested_prop"][prop]["baseline_prec@1"] = result_baseline[prop]
-            protocol[round]["tested_prop"][prop]["trained_prec@1"] = result_all_trained[prop]
+            protocol[round]["tested_prop"][prop]["baseline_prec@1"] = results_baseline[prop]
+            protocol[round]["tested_prop"][prop]["trained_prec@1"] = results_all_trained[prop]
 
         #round1: omitt props seperately
         round = "round1"
         protocol[round] = []
-        #remaining_props = protocol["round0"]["remaining_props"]
         for i, prop in enumerate(all_props):
             print("prop {} of {}".format(i, all_props))
             omitted_props = [prop]
             dictio = {}
             dictio["omitted_props"] = omitted_props
             #train
-            model_path, model_dir_omitted = train(lm_name, train_file, sample, epoch, template, query_type, omitted_props, lama_uhn)
-            #evaluate with LAMA
-            result_file_name = start_evaluation(template, model_dir_omitted, omitted_props)
+            model_path_omitted, results_file_name_omitted = train("", lm_name, train_file, sample, epoch, template, query_type, omitted_props)
+            #evaluate with huggingface
+            start_evaluation(template, model_path_omitted, results_file_name_omitted, omitted_props=omitted_props)
             print("remove dir of model")
-            shutil.rmtree(model_path)
-            result_omitted = dict((pd.read_csv("results/{}.csv".format(result_file_name), sep = ',', header = None)).values)
+            shutil.rmtree(model_path_omitted)
+            results_omitted = dict((pd.read_csv("results/{}.csv".format(results_file_name_omitted), sep = ',', header = None)).values)
             dictio["tested_prop"] = {prop: {}}
-            dictio["tested_prop"][prop]["omitted_prec@1"] = result_omitted[prop]
+            dictio["tested_prop"][prop]["omitted_prec@1"] = results_omitted[prop]
             protocol[round].append(dictio)
         
             #save protocol
-            with open("results/transfer_learning_protocols/{}.json".format(result_file_name), "w+") as protocol_file:
+            with open("results/transfer_learning_protocols/{}.json".format(results_file_name_all_trained), "w+") as protocol_file:
                 json.dump(protocol, protocol_file, indent=4)
     else:
         for index in ["", "2_", "3_"]:
             #train
-            model_path, result_path = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path, results_file_name = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
             
-            #evaluate with LAMA
-            result_file_name = start_evaluation(template, model_path, result_path)
+            #evaluate with huggingface
+            start_evaluation(template, model_path, results_file_name)
             if lama_uhn:
-                result_file_name = start_evaluation(template, model_path, result_path, lama_uhn=True)
+                start_evaluation(template, model_path, results_file_name, lama_uhn=True)
             if sample == "all":
                 #because all triples are used during training, there is no need for a second and third run
                 break
