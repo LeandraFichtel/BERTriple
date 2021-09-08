@@ -61,18 +61,28 @@ def start_evaluation(template, model_path, results_file_name, omitted_props=None
             #evaluation (precision@1 per prop and overall avg precison@1)
             for dictio_triple in tqdm(valid_triples):
                 mask_query = query_template.replace("[X]", dictio_triple["subj_label"]).replace("[Y]", fill_mask.tokenizer.mask_token)
-                dictio_result = fill_mask(mask_query, top_k=1)[0]
-                #create dictio for logging
-                dictio_logging = {}
-                dictio_triple["masked_sentences"] = [mask_query]
-                dictio_logging["query"] = dictio_triple
-                dictio_logging["result"] = dictio_result 
-                #check whether the predicted token is correct
-                if dictio_result["token_str"] == dictio_triple["obj_label"]:
-                    prec_at_1 = prec_at_1 + 1
-                    dictio_logging["prec@1"] = 1
-                else:
-                    dictio_logging["prec@1"] = 0
+                
+                found_valid_token = False
+                predict_try_no = 1
+                while not found_valid_token:
+                    dictio_result = fill_mask(mask_query, top_k=predict_try_no)
+                    predict_try_no += 2
+                    for result in dictio_result:
+                        if result["token_str"] in common_vocab:
+                            found_valid_token = True
+                            #create dictio for logging
+                            dictio_logging = {}
+                            dictio_triple["masked_sentences"] = [mask_query]
+                            dictio_logging["query"] = dictio_triple
+                            dictio_logging["result"] = result 
+                            #check whether the predicted token is correct
+                            if result["token_str"] == dictio_triple["obj_label"]:
+                                prec_at_1 = prec_at_1 + 1
+                                dictio_logging["prec@1"] = 1
+                            else:
+                                dictio_logging["prec@1"] = 0
+                            break
+                assert found_valid_token
                 json.dump(dictio_logging, logging_file)
                 logging_file.write("\n")
             #calculate precision@1 of each prop averaged over all test queries
@@ -97,7 +107,7 @@ def get_initials(lm_name):
 
 if __name__ == "__main__":
     #use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html
-    baseline_lms = ["bert-base-cased", "distilbert-base-cased"]
+    baseline_lms = ["bert-base-cased"]#, "distilbert-base-cased"]
     #check that all baseline language models are cased because the templates for the queries are cased
     for lm_name in baseline_lms:
         assert "uncased" not in lm_name
@@ -142,12 +152,12 @@ if __name__ == "__main__":
     for lm_name in baseline_lms:
         lm_name_initials = get_initials(lm_name)
         model_path = "models/baselines/{}_{}".format(lm_name_initials, template)
-        results_file_name = "results/baselines/{}_{}".format(lm_name_initials, template)
+        results_file_name = "baselines/{}_{}".format(lm_name_initials, template)
         model = AutoModelForMaskedLM.from_pretrained(lm_name)
         model.save_pretrained(model_path, config=True)
         tokenizer = AutoTokenizer.from_pretrained(lm_name)
         tokenizer.save_pretrained(model_path)
         start_evaluation(template, model_path, results_file_name)
-        start_evaluation(template, model_path, results_file_name, lama_uhn=True)
+        #start_evaluation(template, model_path, results_file_name, lama_uhn=True)
 
 
