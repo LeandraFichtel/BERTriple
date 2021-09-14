@@ -10,10 +10,18 @@ from evaluation import start_evaluation
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+def valid_label(obj_label, vocab_type, common_vocab, tokenizer):
+    if vocab_type == "common":
+        return obj_label in common_vocab
+    elif vocab_type == "different":
+        if 3 not in tokenizer(obj_label)["input_ids"]:
+            return True
+        else:
+            return False
 
 #functions
-def get_queries_answers(dictio_prop_triple, lm_name_initials, query_type, template, omitted_props):
-    model_path = "models/baselines/{}_{}".format(lm_name_initials, template)
+def get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, query_type, template, omitted_props):
+    model_path = "models/baselines_{}_vocab/{}_{}".format(vocab_type, lm_name_initials, template)
     fill_mask = pipeline("fill-mask", model=model_path)
     
     queries = []
@@ -41,8 +49,33 @@ def get_queries_answers(dictio_prop_triple, lm_name_initials, query_type, templa
     del fill_mask
     return queries, answers
 
-def prepare_dataset(index, lm_name_initials, train_file, sample, query_type, template, omitted_props):
-    dataset_path = "data/train_datasets/{}{}_{}.json".format(index, train_file, sample)
+def prepare_dataset(index, vocab_type, lm_name, lm_name_initials, train_file, sample, query_type, template, omitted_props):
+    if vocab_type == "common":
+        common_vocab = set(open("data/common_vocab_cased.txt", "r").read().splitlines())
+        tokenizer = None
+        dataset_path = "data/train_datasets/{}{}_common_{}.json".format(index, train_file, sample)
+        dataset_all_path = "data/train_datasets/{}_common_all.json".format(train_file)
+    elif vocab_type == "different":
+        common_vocab = None
+        tokenizer = AutoTokenizer.from_pretrained(lm_name)
+        dataset_path = "data/train_datasets/{}{}_{}_{}.json".format(index, train_file, lm_name_initials, sample)
+        dataset_all_path = "data/train_datasets/{}_{}_all.json".format(train_file, lm_name_initials)
+    if not os.path.exists(dataset_all_path):
+        print("create new all dataset", dataset_all_path)
+        dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
+        dataset_all_general_path = "data/train_datasets/{}_all.json".format(train_file)
+        with open(dataset_all_general_path) as dataset_file:
+            dataset = json.load(dataset_file)
+            #take only the triples where the obj labels are valid, thus they are contained in the vocab
+            for queries_type in dataset:
+                for prop in dataset[queries_type]:
+                    dictio_prop_triple[queries_type][prop] = []
+                    for triple in dataset[queries_type][prop]:
+                        if valid_label(triple["obj"], vocab_type, common_vocab, tokenizer):
+                            dictio_prop_triple[queries_type][prop].append(triple)
+        with open(dataset_all_path, "w") as dataset_file_sample:
+            json.dump(dictio_prop_triple, dataset_file_sample)
+    
     if os.path.exists(dataset_path):
         print("read given dataset", dataset_path)
         with open(dataset_path, "r") as dataset_file:
@@ -51,7 +84,10 @@ def prepare_dataset(index, lm_name_initials, train_file, sample, query_type, tem
         #prepare dataset
         print("create new dataset", dataset_path)
         dictio_prop_triple = {"subj_queries": {}, "obj_queries": {}}
-        dataset_all_path = "data/train_datasets/{}_all.json".format(train_file)
+        if vocab_type == "common":
+            dataset_all_path = "data/train_datasets/{}_common_all.json".format(train_file)
+        elif vocab_type == "different":
+            dataset_all_path = "data/train_datasets/{}_{}_all.json".format(train_file, lm_name_initials)
         with open(dataset_all_path) as dataset_file:
             dataset = json.load(dataset_file)
             #take only a sample of the triples
@@ -68,18 +104,18 @@ def prepare_dataset(index, lm_name_initials, train_file, sample, query_type, tem
     all_queries = []
     all_answers = []
     if query_type == "subjobj":
-        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "subj_queries", template, omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, "subj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
-        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "obj_queries", template, omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, "obj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     elif query_type == "subj":
-        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "subj_queries", template, omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, "subj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     elif query_type == "obj":
-        queries, answers = get_queries_answers(dictio_prop_triple, lm_name_initials, "obj_queries", template, omitted_props)
+        queries, answers = get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, "obj_queries", template, omitted_props)
         all_queries = all_queries + queries
         all_answers = all_answers + answers
     return all_queries, all_answers
@@ -105,12 +141,12 @@ def get_initials(lm_name):
             lm_name_initials = lm_name_initials + initial.upper()[0]
     return lm_name_initials
 
-def train(index, lm_name, train_file, sample, epoch, template, query_type, omitted_props):
+def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query_type, omitted_props):
     lm_name_initials = get_initials(lm_name)
-    train_queries, train_answers = prepare_dataset(index, lm_name_initials, train_file, sample, query_type, template, omitted_props)
+    tokenizer = AutoTokenizer.from_pretrained(lm_name)
+    train_queries, train_answers = prepare_dataset(index, vocab_type, lm_name, lm_name_initials, train_file, sample, query_type, template, omitted_props)
     print("check datapoint with {} template:".format(template), train_queries[0], train_answers[0])
     #use tokenizer to get encodings
-    tokenizer = AutoTokenizer.from_pretrained(lm_name)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
     train_answer_encodings = tokenizer(train_answers, truncation=True, padding='max_length', max_length=256)["input_ids"]
     #get final dataset for training
@@ -125,7 +161,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     else:
         props_string = ""
     
-    model_dir = "{}{}F_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
+    model_dir = "{}{}F_{}_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, vocab_type, sample, query_type, epoch, template, props_string)
     model_path = "models/"+model_dir
     if os.path.exists(model_path):
         print("remove dir of model")
@@ -135,7 +171,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     training_args = TrainingArguments(
     output_dir=model_path+'/results', # output directory
     num_train_epochs=epoch,           # total number of training epochs
-    per_device_train_batch_size=16,   # batch size per device during training
+    per_device_train_batch_size=12,   # batch size per device during training
     per_device_eval_batch_size=64,    # batch size for evaluation
     warmup_steps=500,                 # number of warmup steps for learning rate scheduler
     weight_decay=0.01,                # strength of weight decay
@@ -144,7 +180,7 @@ def train(index, lm_name, train_file, sample, epoch, template, query_type, omitt
     save_total_limit=0,
     save_strategy="no"
     )
-    model = AutoModelForMaskedLM.from_pretrained("models/baselines/{}_{}".format(lm_name_initials, template))
+    model = AutoModelForMaskedLM.from_pretrained("models/baselines_{}_vocab/{}_{}".format(vocab_type, lm_name_initials, template))
 
     trainer = Trainer(
     model=model,                         # the instantiated 🤗 Transformers model to be trained
@@ -163,6 +199,7 @@ if __name__ == "__main__":
     #parser
     parser = argparse.ArgumentParser()
     parser.add_argument('-lm_name', help="name of the model which should be fine-tuned (use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html)")
+    parser.add_argument('-vocab', help="set whether the common vocab or the corresponding vocab of the fine-tuned lm should be used")
     parser.add_argument('-train_file', help="training dataset name (AUTOPROMPT41)")
     parser.add_argument('-sample', help="set how many triple should be used of each property at maximum (e.g. 500 (=500 triples per prop for each query type) or all (= all given triples per prop for each query type))")
     parser.add_argument('-epoch', help="set how many epoches should be executed")
@@ -174,6 +211,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
     lm_name = args.lm_name
+    vocab_type = args.vocab
+    assert vocab_type in ["common", "different"]
     train_file = args.train_file
     epoch = int(args.epoch)
     template = args.template
@@ -187,16 +226,16 @@ if __name__ == "__main__":
     if transfer_learning:
         lm_name_initials = get_initials(lm_name)
         #get results of baseline
-        results_baseline = dict((pd.read_csv('results/baselines/{}_{}.csv'.format(lm_name_initials, template), sep = ',', header = None)).values)
+        results_baseline = dict((pd.read_csv('results/baselines_{}_vocab/{}_{}.csv'.format(vocab_type, lm_name_initials, template), sep = ',', header = None)).values)
         
         #train all props if it was not already done with this setup
         props_string = ""
         model_dir = "{}F_{}_{}_{}_{}_{}{}".format(lm_name_initials, train_file, sample, query_type, epoch, template, props_string)
         model_path_all_trained = "models/"+model_dir
         if not os.path.exists(model_path_all_trained):
-            model_path_all_trained, results_file_name_all_trained = train("", lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path_all_trained, results_file_name_all_trained = train("", vocab_type, lm_name, train_file, sample, epoch, template, query_type, None)
             #evaluate with huggingface
-            start_evaluation(template, model_path_all_trained, results_file_name_all_trained)
+            start_evaluation(template, vocab_type, model_path_all_trained, results_file_name_all_trained)
         else:
             results_file_name_all_trained = model_dir
         results_all_trained = dict((pd.read_csv('results/{}.csv'.format(results_file_name_all_trained), sep = ',', header = None)).values)
@@ -224,9 +263,9 @@ if __name__ == "__main__":
             dictio = {}
             dictio["omitted_props"] = omitted_props
             #train
-            model_path_omitted, results_file_name_omitted = train("", lm_name, train_file, sample, epoch, template, query_type, omitted_props)
+            model_path_omitted, results_file_name_omitted = train("", vocab_type, lm_name, train_file, sample, epoch, template, query_type, omitted_props)
             #evaluate with huggingface
-            start_evaluation(template, model_path_omitted, results_file_name_omitted, omitted_props=omitted_props)
+            start_evaluation(template, vocab_type, model_path_omitted, results_file_name_omitted, omitted_props=omitted_props)
             print("remove dir of model")
             shutil.rmtree(model_path_omitted)
             results_omitted = dict((pd.read_csv("results/{}.csv".format(results_file_name_omitted), sep = ',', header = None)).values)
@@ -240,12 +279,12 @@ if __name__ == "__main__":
     else:
         for index in ["", "2_", "3_"]:
             #train
-            model_path, results_file_name = train(index, lm_name, train_file, sample, epoch, template, query_type, None)
+            model_path, results_file_name = train(index, vocab_type, lm_name, train_file, sample, epoch, template, query_type, None)
             
             #evaluate with huggingface
-            start_evaluation(template, model_path, results_file_name)
+            start_evaluation(template, vocab_type, model_path, results_file_name)
             if lama_uhn:
-                start_evaluation(template, model_path, results_file_name, lama_uhn=True)
+                start_evaluation(template, vocab_type, model_path, results_file_name, lama_uhn=True)
             if sample == "all":
                 #because all triples are used during training, there is no need for a second and third run
                 break
