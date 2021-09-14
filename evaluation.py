@@ -10,10 +10,7 @@ def valid_label(obj_label, vocab_type, common_vocab, tokenizer):
     if vocab_type == "common":
         return obj_label in common_vocab
     elif vocab_type == "different":
-        if 3 not in tokenizer(obj_label)["input_ids"]:
-            return True
-        else:
-            return False
+        return len(tokenizer(obj_label, add_special_tokens=False)["input_ids"]) == 1
 
 def start_evaluation(template, vocab_type, model_path, results_file_name, omitted_props=None, lama_uhn=False):
     if omitted_props:
@@ -34,19 +31,16 @@ def start_evaluation(template, vocab_type, model_path, results_file_name, omitte
         test_data_path = "data/test_datasets/TREx/"
         logging_path = model_path+"/logging_lama"
         print("T-REx evaluation: {}".format(model_path))
-    
-    if vocab_type == "common":
-        common_vocab = set(open("data/common_vocab_cased.txt", "r").read().splitlines())
-        tokenizer = None
-    elif vocab_type == "different":
-        common_vocab = None
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        
     #load LAMA common vocab to filter results, e.g. not have stop_words like "nothing" or "him" as predictions
     LAMA_common_vocab = set(open("data/LAMA_common_vocab_cased.txt", "r").read().splitlines())
     if os.path.exists(logging_path):
         print("remove logging dir of model")
         shutil.rmtree(logging_path)
     os.mkdir(logging_path)
+    #get common_vocab and tokenizer of current model
+    common_vocab = set(open("data/common_vocab_cased.txt", "r").read().splitlines())
+    tokenizer = AutoTokenizer.from_pretrained(model_path, add_prefix_space=True)
     #iterate through all test_data for all properties
     avg_prec_at_1 = 0
     results_file = open("results/{}.csv".format(results_file_name), "w+")
@@ -76,12 +70,14 @@ def start_evaluation(template, vocab_type, model_path, results_file_name, omitte
             for dictio_triple in tqdm(valid_triples):
                 mask_query = query_template.replace("[X]", dictio_triple["subj_label"]).replace("[Y]", fill_mask.tokenizer.mask_token)
                 found_valid_token = False
-                predict_try_no = 1
+                predict_try_no = 100
                 index = 0
                 while not found_valid_token:
                     dictio_result = fill_mask(mask_query, top_k=predict_try_no)
                     for result in dictio_result[index:]:
-                        if result["token_str"] in LAMA_common_vocab:
+                        #delete blankspace at beginning and at end of token
+                        predicted_token = result["token_str"].strip()
+                        if predicted_token in LAMA_common_vocab:
                             found_valid_token = True
                             #create dictio for logging
                             dictio_logging = {}
@@ -89,7 +85,7 @@ def start_evaluation(template, vocab_type, model_path, results_file_name, omitte
                             dictio_logging["query"] = dictio_triple
                             dictio_logging["result"] = result 
                             #check whether the predicted token is correct
-                            if result["token_str"] == dictio_triple["obj_label"]:
+                            if predicted_token == dictio_triple["obj_label"]:
                                 prec_at_1 = prec_at_1 + 1
                                 dictio_logging["prec@1"] = 1
                             else:
@@ -122,9 +118,8 @@ def get_initials(lm_name):
     return lm_name_initials
 
 if __name__ == "__main__":
-    tokenizer = AutoTokenizer.from_pretrained("roberta-base")
     #use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html
-    baseline_lms = ["bert-base-cased", "bert-large-cased", "distilbert-base-cased"]
+    baseline_lms = ["roberta-base", "facebook/bart-base"]
     #check that all baseline language models are cased because the templates for the queries are cased
     for lm_name in baseline_lms:
         assert "uncased" not in lm_name
@@ -161,9 +156,9 @@ if __name__ == "__main__":
         print("length of common vocab before intersection:", len(common_vocab))
         for lm_name in baseline_lms:
             vocab = common_vocab.copy()
-            tokenizer = AutoTokenizer.from_pretrained(lm_name)
+            tokenizer = AutoTokenizer.from_pretrained(lm_name, add_prefix_space=True)
             for token in common_vocab:
-                if 3 in tokenizer(token)["input_ids"]:
+                if len(tokenizer(token, add_special_tokens=False)["input_ids"]) > 1:
                     vocab.remove(token)
             common_vocab = common_vocab.intersection(vocab)
             print("length of common vocab after intersection with {}: {}".format(lm_name, len(common_vocab)))
@@ -190,7 +185,7 @@ if __name__ == "__main__":
             model.save_pretrained(model_path, config=True)
             tokenizer = AutoTokenizer.from_pretrained(lm_name)
             tokenizer.save_pretrained(model_path)
-            start_evaluation(template, vocab_type, model_path, results_file_name)
+            #start_evaluation(template, vocab_type, model_path, results_file_name)
             start_evaluation(template, vocab_type, model_path, results_file_name, lama_uhn=True)
 
 

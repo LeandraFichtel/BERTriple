@@ -14,10 +14,7 @@ def valid_label(obj_label, vocab_type, common_vocab, tokenizer):
     if vocab_type == "common":
         return obj_label in common_vocab
     elif vocab_type == "different":
-        if 3 not in tokenizer(obj_label)["input_ids"]:
-            return True
-        else:
-            return False
+        return len(tokenizer(obj_label, add_special_tokens=False)["input_ids"]) == 1
 
 #functions
 def get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, query_type, template, omitted_props):
@@ -50,14 +47,13 @@ def get_queries_answers(dictio_prop_triple, vocab_type, lm_name_initials, query_
     return queries, answers
 
 def prepare_dataset(index, vocab_type, lm_name, lm_name_initials, train_file, sample, query_type, template, omitted_props):
+    #get common_vocab and tokenizer of current model
+    common_vocab = set(open("data/common_vocab_cased.txt", "r").read().splitlines())
+    tokenizer = AutoTokenizer.from_pretrained(lm_name, add_prefix_space=True)
     if vocab_type == "common":
-        common_vocab = set(open("data/common_vocab_cased.txt", "r").read().splitlines())
-        tokenizer = None
         dataset_path = "data/train_datasets/{}{}_common_{}.json".format(index, train_file, sample)
         dataset_all_path = "data/train_datasets/{}_common_all.json".format(train_file)
     elif vocab_type == "different":
-        common_vocab = None
-        tokenizer = AutoTokenizer.from_pretrained(lm_name)
         dataset_path = "data/train_datasets/{}{}_{}_{}.json".format(index, train_file, lm_name_initials, sample)
         dataset_all_path = "data/train_datasets/{}_{}_all.json".format(train_file, lm_name_initials)
     if not os.path.exists(dataset_all_path):
@@ -143,10 +139,10 @@ def get_initials(lm_name):
 
 def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query_type, omitted_props):
     lm_name_initials = get_initials(lm_name)
-    tokenizer = AutoTokenizer.from_pretrained(lm_name)
     train_queries, train_answers = prepare_dataset(index, vocab_type, lm_name, lm_name_initials, train_file, sample, query_type, template, omitted_props)
     print("check datapoint with {} template:".format(template), train_queries[0], train_answers[0])
     #use tokenizer to get encodings
+    tokenizer = AutoTokenizer.from_pretrained(lm_name, add_prefix_space=True)
     train_question_encodings = tokenizer(train_queries, truncation=True, padding='max_length', max_length=256)
     train_answer_encodings = tokenizer(train_answers, truncation=True, padding='max_length', max_length=256)["input_ids"]
     #get final dataset for training
