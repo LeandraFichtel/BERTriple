@@ -4,7 +4,7 @@ import operator
 
 def get_dictio_prop_data():
     dictio_prop_template = {}
-    file_relations = open("/data/fichtel/BERTriple/relations.jsonl")
+    file_relations = open("../data/relations.jsonl")
     for line in file_relations:
         data = json.loads(line)
         prop = data["relation"]

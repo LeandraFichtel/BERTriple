@@ -191,7 +191,7 @@ def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query
 
 if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-    dictio_prop_template = json.load(open("/data/fichtel/BERTriple/templates.json", "r"))
+    dictio_prop_template = json.load(open("data/templates.json", "r"))
     #parser
     parser = argparse.ArgumentParser()
     parser.add_argument('-lm_name', help="name of the model which should be fine-tuned (use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html)")
