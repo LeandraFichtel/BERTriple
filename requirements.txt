@@ -1,0 +1,4 @@
+python==3.6.9
+pytorch==1.2.0
+tqdm==4.26.0
+spacy==2.1.8

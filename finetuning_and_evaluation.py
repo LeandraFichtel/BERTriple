@@ -159,6 +159,7 @@ def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query
     
     model_dir = "{}{}F_{}_{}_{}_{}_{}_{}{}".format(index, lm_name_initials, train_file, vocab_type, sample, query_type, epoch, template, props_string)
     model_path = "models/"+model_dir
+    
     if os.path.exists(model_path):
         print("remove dir of model")
         shutil.rmtree(model_path)
@@ -167,7 +168,7 @@ def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query
     training_args = TrainingArguments(
     output_dir=model_path+'/results', # output directory
     num_train_epochs=epoch,           # total number of training epochs
-    per_device_train_batch_size=12,   # batch size per device during training
+    per_device_train_batch_size=4,   # batch size per device during training
     per_device_eval_batch_size=64,    # batch size for evaluation
     warmup_steps=500,                 # number of warmup steps for learning rate scheduler
     weight_decay=0.01,                # strength of weight decay
@@ -278,7 +279,7 @@ if __name__ == "__main__":
             model_path, results_file_name = train(index, vocab_type, lm_name, train_file, sample, epoch, template, query_type, None)
             
             #evaluate with huggingface
-            start_evaluation(template, vocab_type, model_path, results_file_name)
+            #start_evaluation(template, vocab_type, model_path, results_file_name)
             if lama_uhn:
                 start_evaluation(template, vocab_type, model_path, results_file_name, lama_uhn=True)
             if sample == "all":

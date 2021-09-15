@@ -118,19 +118,15 @@ def get_initials(lm_name):
     return lm_name_initials
 
 if __name__ == "__main__":
-    #use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html
-    baseline_lms = ["roberta-base", "facebook/bart-base"]
+    #parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-lm_names', default=[], nargs='+', help="names of the baseline language models (use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html)")
+    parser.add_argument('-vocab', help="set whether a common vocab or different vocabs of the baseline language models should be used")
+    args = parser.parse_args()
+    baseline_lms = args.lm_names
     #check that all baseline language models are cased because the templates for the queries are cased
     for lm_name in baseline_lms:
         assert "uncased" not in lm_name
-    
-    if not os.path.exists("data/"):
-        exit("Please download the data dir from this url: TODO")
-
-    #parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-vocab', help="set whether a common vocab or different vocabs of the baseline lm should be used")
-    args = parser.parse_args()
     vocab_type = args.vocab
     assert vocab_type in ["common", "different"]
 
@@ -177,15 +173,14 @@ if __name__ == "__main__":
     print("evaluating the baseline models: {}".format(baseline_lms))
     for lm_name in baseline_lms:
         lm_name_initials = get_initials(lm_name)
-        #for template in ["LAMA", "label", "ID"]:
-        for template in ["LAMA"]:
+        for template in ["LAMA", "label", "ID"]:
             model_path = "models/baselines_{}_vocab/{}_{}".format(vocab_type, lm_name_initials, template)
             results_file_name = "baselines_{}_vocab/{}_{}".format(vocab_type, lm_name_initials, template)
             model = AutoModelForMaskedLM.from_pretrained(lm_name)
             model.save_pretrained(model_path, config=True)
             tokenizer = AutoTokenizer.from_pretrained(lm_name)
             tokenizer.save_pretrained(model_path)
-            #start_evaluation(template, vocab_type, model_path, results_file_name)
+            start_evaluation(template, vocab_type, model_path, results_file_name)
             start_evaluation(template, vocab_type, model_path, results_file_name, lama_uhn=True)
 
 
