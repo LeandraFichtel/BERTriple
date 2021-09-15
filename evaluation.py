@@ -118,6 +118,10 @@ def get_initials(lm_name):
     return lm_name_initials
 
 if __name__ == "__main__":
+    if not os.path.exists("models"):
+        os.mkdir("models")
+    if not os.path.exists("results"):
+        os.mkdir("results")
     #parser
     parser = argparse.ArgumentParser()
     parser.add_argument('-lm_names', default=[], nargs='+', help="names of the baseline language models (use the huggingface identifiers: https://huggingface.co/transformers/pretrained_models.html)")
