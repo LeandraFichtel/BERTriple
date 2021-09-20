@@ -1,6 +1,6 @@
 # BERTriple
 
-This GitHub repo belongs to the paper *Prompt Tuning or Fine-Tuning - Investigating Relational Knowledge in Pre-Trained Language Models* published on AKBC2021.
+This GitHub repo belongs to the paper [Prompt Tuning or Fine-Tuning - Investigating Relational Knowledge in Pre-Trained Language Models](https://www.akbc.ws/2021/papers/o7sMlpr9yBW) published on AKBC2021.
 ```
 @inproceedings{
 fichtel2021prompt,
