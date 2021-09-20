@@ -168,7 +168,11 @@ def train(index, vocab_type, lm_name, train_file, sample, epoch, template, query
     training_args = TrainingArguments(
     output_dir=model_path+'/results', # output directory
     num_train_epochs=epoch,           # total number of training epochs
+<<<<<<< HEAD
     per_device_train_batch_size=16,   # batch size per device during training
+=======
+    per_device_train_batch_size=4,   # batch size per device during training
+>>>>>>> 309234fabe96ac7d7154b9b6ef77d9088ec368a3
     per_device_eval_batch_size=64,    # batch size for evaluation
     warmup_steps=500,                 # number of warmup steps for learning rate scheduler
     weight_decay=0.01,                # strength of weight decay
