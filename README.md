@@ -1,4 +1,19 @@
-## BERTriple
+# BERTriple
+
+This GitHub repo belongs to the paper *Prompt Tuning or Fine-Tuning - Investigating Relational Knowledge in Pre-Trained Language Models* published on AKBC2021.
+```
+@inproceedings{
+fichtel2021prompt,
+title={Prompt Tuning or Fine-Tuning - Investigating Relational Knowledge in Pre-Trained Language Models},
+author={Leandra Fichtel and Jan-Christoph Kalo and Wolf-Tilo Balke},
+booktitle={3rd Conference on Automated Knowledge Base Construction},
+year={2021},
+url={https://openreview.net/forum?id=o7sMlpr9yBW},
+doi={}
+}
+```
+
+## Follow the instructions to reproduce our evaluation results :)
 
 1. Create an environment:
 	```
