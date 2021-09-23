@@ -25,7 +25,7 @@ doi={}
 	```
 3. Run our experiments:
 	```
-	python run_experiments.py
+	./run_experiments.sh
 	``` 
 4. The evaluation results are under ```results/ ```
 
